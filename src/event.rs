@@ -70,153 +70,162 @@
 //! Check the [examples](https://github.com/crossterm-rs/crossterm/tree/master/examples) folder for more of
 //! them (`event-*`).
 
-use std::time::Duration;
+not_wasm! { use std::time::Duration; }
 
-use parking_lot::RwLock;
+not_wasm! { use parking_lot::RwLock; }
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 use bitflags::bitflags;
-use filter::{EventFilter, Filter};
-use lazy_static::lazy_static;
-#[cfg(feature = "event-stream")]
-pub use stream::EventStream;
-use timeout::PollTimeout;
 
-use crate::{Command, Result};
+not_wasm! {
+    use filter::{EventFilter, Filter};
+    use lazy_static::lazy_static;
+    #[cfg(feature = "event-stream")]
+    pub use stream::EventStream;
+    use timeout::PollTimeout;
+}
 
-mod ansi;
-pub(crate) mod filter;
-mod read;
-mod source;
-#[cfg(feature = "event-stream")]
-mod stream;
-pub(crate) mod sys;
-mod timeout;
+not_wasm! { use crate::{Command, Result}; }
 
-lazy_static! {
+#[cfg(not(target_arch = "wasm32"))] mod ansi;
+
+not_wasm! {
+    pub(crate) mod filter;
+    mod read;
+    mod source;
+    #[cfg(feature = "event-stream")]
+    mod stream;
+    pub(crate) mod sys;
+    mod timeout;
+}
+
+not_wasm! {
+    lazy_static! {
     /// Static instance of `InternalEventReader`.
     /// This needs to be static because there can be one event reader.
     static ref INTERNAL_EVENT_READER: RwLock<read::InternalEventReader> = RwLock::new(read::InternalEventReader::default());
-}
+    }
 
-/// Checks if there is an [`Event`](enum.Event.html) available.
-///
-/// Returns `Ok(true)` if an [`Event`](enum.Event.html) is available otherwise it returns `Ok(false)`.
-///
-/// `Ok(true)` guarantees that subsequent call to the [`read`](fn.read.html) function
-/// wont block.
-///
-/// # Arguments
-///
-/// * `timeout` - maximum waiting time for event availability
-///
-/// # Examples
-///
-/// Return immediately:
-///
-/// ```no_run
-/// use std::time::Duration;
-///
-/// use crossterm::{event::poll, Result};
-///
-/// fn is_event_available() -> Result<bool> {
-///     // Zero duration says that the `poll` function must return immediately
-///     // with an `Event` availability information
-///     poll(Duration::from_secs(0))
-/// }
-/// ```
-///
-/// Wait up to 100ms:
-///
-/// ```no_run
-/// use std::time::Duration;
-///
-/// use crossterm::{event::poll, Result};
-///
-/// fn is_event_available() -> Result<bool> {
-///     // Wait for an `Event` availability for 100ms. It returns immediately
-///     // if an `Event` is/becomes available.
-///     poll(Duration::from_millis(100))
-/// }
-/// ```
-pub fn poll(timeout: Duration) -> Result<bool> {
-    poll_internal(Some(timeout), &EventFilter)
-}
+    /// Checks if there is an [`Event`](enum.Event.html) available.
+    ///
+    /// Returns `Ok(true)` if an [`Event`](enum.Event.html) is available otherwise it returns `Ok(false)`.
+    ///
+    /// `Ok(true)` guarantees that subsequent call to the [`read`](fn.read.html) function
+    /// wont block.
+    ///
+    /// # Arguments
+    ///
+    /// * `timeout` - maximum waiting time for event availability
+    ///
+    /// # Examples
+    ///
+    /// Return immediately:
+    ///
+    /// ```no_run
+    /// use std::time::Duration;
+    ///
+    /// use crossterm::{event::poll, Result};
+    ///
+    /// fn is_event_available() -> Result<bool> {
+    ///     // Zero duration says that the `poll` function must return immediately
+    ///     // with an `Event` availability information
+    ///     poll(Duration::from_secs(0))
+    /// }
+    /// ```
+    ///
+    /// Wait up to 100ms:
+    ///
+    /// ```no_run
+    /// use std::time::Duration;
+    ///
+    /// use crossterm::{event::poll, Result};
+    ///
+    /// fn is_event_available() -> Result<bool> {
+    ///     // Wait for an `Event` availability for 100ms. It returns immediately
+    ///     // if an `Event` is/becomes available.
+    ///     poll(Duration::from_millis(100))
+    /// }
+    /// ```
+    pub fn poll(timeout: Duration) -> Result<bool> {
+        poll_internal(Some(timeout), &EventFilter)
+    }
 
-/// Reads a single [`Event`](enum.Event.html).
-///
-/// This function blocks until an [`Event`](enum.Event.html) is available. Combine it with the
-/// [`poll`](fn.poll.html) function to get non-blocking reads.
-///
-/// # Examples
-///
-/// Blocking read:
-///
-/// ```no_run
-/// use crossterm::{event::read, Result};
-///
-/// fn print_events() -> Result<bool> {
-///     loop {
-///         // Blocks until an `Event` is available
-///         println!("{:?}", read()?);
-///     }
-/// }
-/// ```
-///
-/// Non-blocking read:
-///
-/// ```no_run
-/// use std::time::Duration;
-///
-/// use crossterm::{event::{read, poll}, Result};
-///
-/// fn print_events() -> Result<bool> {
-///     loop {
-///         if poll(Duration::from_millis(100))? {
-///             // It's guaranteed that `read` wont block, because `poll` returned
-///             // `Ok(true)`.
-///             println!("{:?}", read()?);
-///         } else {
-///             // Timeout expired, no `Event` is available
-///         }
-///     }
-/// }
-/// ```
-pub fn read() -> Result<Event> {
-    match read_internal(&EventFilter)? {
-        InternalEvent::Event(event) => Ok(event),
-        #[cfg(unix)]
-        _ => unreachable!(),
+    /// Reads a single [`Event`](enum.Event.html).
+    ///
+    /// This function blocks until an [`Event`](enum.Event.html) is available. Combine it with the
+    /// [`poll`](fn.poll.html) function to get non-blocking reads.
+    ///
+    /// # Examples
+    ///
+    /// Blocking read:
+    ///
+    /// ```no_run
+    /// use crossterm::{event::read, Result};
+    ///
+    /// fn print_events() -> Result<bool> {
+    ///     loop {
+    ///         // Blocks until an `Event` is available
+    ///         println!("{:?}", read()?);
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// Non-blocking read:
+    ///
+    /// ```no_run
+    /// use std::time::Duration;
+    ///
+    /// use crossterm::{event::{read, poll}, Result};
+    ///
+    /// fn print_events() -> Result<bool> {
+    ///     loop {
+    ///         if poll(Duration::from_millis(100))? {
+    ///             // It's guaranteed that `read` wont block, because `poll` returned
+    ///             // `Ok(true)`.
+    ///             println!("{:?}", read()?);
+    ///         } else {
+    ///             // Timeout expired, no `Event` is available
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    pub fn read() -> Result<Event> {
+        match read_internal(&EventFilter)? {
+            InternalEvent::Event(event) => Ok(event),
+            #[cfg(unix)]
+            _ => unreachable!(),
+        }
+    }
+
+    /// Polls to check if there are any `InternalEvent`s that can be read withing the given duration.
+    pub(crate) fn poll_internal<F>(timeout: Option<Duration>, filter: &F) -> Result<bool>
+    where
+        F: Filter,
+    {
+        let (mut reader, timeout) = if let Some(timeout) = timeout {
+            let poll_timeout = PollTimeout::new(Some(timeout));
+            if let Some(reader) = INTERNAL_EVENT_READER.try_write_for(timeout) {
+                (reader, poll_timeout.leftover())
+            } else {
+                return Ok(false);
+            }
+        } else {
+            (INTERNAL_EVENT_READER.write(), None)
+        };
+        reader.poll(timeout, filter)
+    }
+
+    /// Reads a single `InternalEvent`.
+    pub(crate) fn read_internal<F>(filter: &F) -> Result<InternalEvent>
+    where
+        F: Filter,
+    {
+        let mut reader = INTERNAL_EVENT_READER.write();
+        reader.read(filter)
     }
 }
 
-/// Polls to check if there are any `InternalEvent`s that can be read withing the given duration.
-pub(crate) fn poll_internal<F>(timeout: Option<Duration>, filter: &F) -> Result<bool>
-where
-    F: Filter,
-{
-    let (mut reader, timeout) = if let Some(timeout) = timeout {
-        let poll_timeout = PollTimeout::new(Some(timeout));
-        if let Some(reader) = INTERNAL_EVENT_READER.try_write_for(timeout) {
-            (reader, poll_timeout.leftover())
-        } else {
-            return Ok(false);
-        }
-    } else {
-        (INTERNAL_EVENT_READER.write(), None)
-    };
-    reader.poll(timeout, filter)
-}
-
-/// Reads a single `InternalEvent`.
-pub(crate) fn read_internal<F>(filter: &F) -> Result<InternalEvent>
-where
-    F: Filter,
-{
-    let mut reader = INTERNAL_EVENT_READER.write();
-    reader.read(filter)
-}
 
 /// A command that enables mouse event capturing.
 ///
@@ -224,21 +233,23 @@ where
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EnableMouseCapture;
 
-impl Command for EnableMouseCapture {
-    type AnsiType = &'static str;
+not_wasm!{
+    impl Command for EnableMouseCapture {
+        type AnsiType = &'static str;
 
-    fn ansi_code(&self) -> Self::AnsiType {
-        ansi::ENABLE_MOUSE_MODE_CSI_SEQUENCE
-    }
+        fn ansi_code(&self) -> Self::AnsiType {
+            ansi::ENABLE_MOUSE_MODE_CSI_SEQUENCE
+        }
 
-    #[cfg(windows)]
-    fn execute_winapi(&self) -> Result<()> {
-        sys::windows::enable_mouse_capture()
-    }
+        #[cfg(windows)]
+        fn execute_winapi(&self) -> Result<()> {
+            sys::windows::enable_mouse_capture()
+        }
 
-    #[cfg(windows)]
-    fn is_ansi_code_supported(&self) -> bool {
-        false
+        #[cfg(windows)]
+        fn is_ansi_code_supported(&self) -> bool {
+            false
+        }
     }
 }
 
@@ -248,21 +259,23 @@ impl Command for EnableMouseCapture {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DisableMouseCapture;
 
-impl Command for DisableMouseCapture {
-    type AnsiType = &'static str;
+not_wasm!{
+    impl Command for DisableMouseCapture {
+        type AnsiType = &'static str;
 
-    fn ansi_code(&self) -> Self::AnsiType {
-        ansi::DISABLE_MOUSE_MODE_CSI_SEQUENCE
-    }
+        fn ansi_code(&self) -> Self::AnsiType {
+            ansi::DISABLE_MOUSE_MODE_CSI_SEQUENCE
+        }
 
-    #[cfg(windows)]
-    fn execute_winapi(&self) -> Result<()> {
-        sys::windows::disable_mouse_capture()
-    }
+        #[cfg(windows)]
+        fn execute_winapi(&self) -> Result<()> {
+            sys::windows::disable_mouse_capture()
+        }
 
-    #[cfg(windows)]
-    fn is_ansi_code_supported(&self) -> bool {
-        false
+        #[cfg(windows)]
+        fn is_ansi_code_supported(&self) -> bool {
+            false
+        }
     }
 }
 

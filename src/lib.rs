@@ -228,27 +228,48 @@
 //! [stderr]: https://doc.rust-lang.org/std/io/fn.stderr.html
 //! [flush]: https://doc.rust-lang.org/std/io/trait.Write.html#tymethod.flush
 
-pub use crate::{
-    ansi::Ansi,
-    command::{Command, ExecutableCommand, QueueableCommand},
-    error::{ErrorKind, Result},
-};
+macro_rules! not_wasm {
+    ($($i:item)*) => {
+        $( #[cfg(not(target_arch = "wasm32"))] $i )*
+    };
+}
+
+not_wasm! {
+    pub use crate::{
+        ansi::Ansi,
+        command::{Command, ExecutableCommand, QueueableCommand},
+        error::{ErrorKind, Result},
+    };
+}
+
+// These modules use macros and thus can't be used with the `not_wasm` macro.
 
 /// A module to work with the terminal cursor
+#[cfg(not(target_arch = "wasm32"))]
 pub mod cursor;
-/// A module to read events.
-pub mod event;
 /// A module to apply attributes and colors on your text.
+#[cfg(not(target_arch = "wasm32"))]
 pub mod style;
 /// A module to work with the terminal.
+#[cfg(not(target_arch = "wasm32"))]
 pub mod terminal;
 
-/// A module to query if the current instance is a tty.
-pub mod tty;
+not_wasm! {
+    /// A module to query if the current instance is a tty.
+    pub mod tty;
 
-mod ansi;
-#[cfg(windows)]
-pub(crate) mod ansi_support;
-mod command;
+    mod ansi;
+    #[cfg(windows)]
+    pub(crate) mod ansi_support;
+    mod command;
+}
+
+
+// The modules below work (in some capacity) on wasm targets.
+
 mod error;
+
+/// A module to read events.
+pub mod event;
+
 pub(crate) mod macros;
