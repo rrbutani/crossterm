@@ -36,7 +36,7 @@ macro_rules! handle_command {
                 command.execute_winapi().map_err($crate::ErrorKind::from)
             }
         }
-        #[cfg(unix)]
+        #[cfg(not(windows))]
         {
             write_ansi_code!($writer, $command.ansi_code())
         }

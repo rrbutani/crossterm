@@ -234,13 +234,11 @@ macro_rules! not_wasm {
     };
 }
 
-not_wasm! {
-    pub use crate::{
-        ansi::Ansi,
-        command::{Command, ExecutableCommand, QueueableCommand},
-        error::{ErrorKind, Result},
-    };
-}
+pub use crate::{
+    ansi::Ansi,
+    command::{Command, ExecutableCommand, QueueableCommand},
+    error::{ErrorKind, Result},
+};
 
 // These modules use macros and thus can't be used with the `not_wasm` macro.
 
@@ -258,15 +256,15 @@ not_wasm! {
     /// A module to query if the current instance is a tty.
     pub mod tty;
 
-    mod ansi;
     #[cfg(windows)]
     pub(crate) mod ansi_support;
-    mod command;
 }
 
 
 // The modules below work (in some capacity) on wasm targets.
 
+mod ansi;
+mod command;
 mod error;
 
 /// A module to read events.
