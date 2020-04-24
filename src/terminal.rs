@@ -88,30 +88,34 @@ use serde::{Deserialize, Serialize};
 
 #[doc(no_inline)]
 use crate::Command;
-use crate::{impl_display, Result};
+use crate::{impl_display};
 
 mod ansi;
 pub(crate) mod sys;
 
-/// Enables raw mode.
-///
-/// Please have a look at the [raw mode](./#raw-mode) section.
-pub fn enable_raw_mode() -> Result<()> {
-    sys::enable_raw_mode()
-}
+not_wasm! {
+    use crate::Result;
 
-/// Disables raw mode.
-///
-/// Please have a look at the [raw mode](./#raw-mode) section.
-pub fn disable_raw_mode() -> Result<()> {
-    sys::disable_raw_mode()
-}
+    /// Enables raw mode.
+    ///
+    /// Please have a look at the [raw mode](./#raw-mode) section.
+    pub fn enable_raw_mode() -> Result<()> {
+        sys::enable_raw_mode()
+    }
 
-/// Returns the terminal size `(columns, rows)`.
-///
-/// The top left cell is represented `(1, 1)`.
-pub fn size() -> Result<(u16, u16)> {
-    sys::size()
+    /// Disables raw mode.
+    ///
+    /// Please have a look at the [raw mode](./#raw-mode) section.
+    pub fn disable_raw_mode() -> Result<()> {
+        sys::disable_raw_mode()
+    }
+
+    /// Returns the terminal size `(columns, rows)`.
+    ///
+    /// The top left cell is represented `(1, 1)`.
+    pub fn size() -> Result<(u16, u16)> {
+        sys::size()
+    }
 }
 
 /// A command that switches to alternate screen.

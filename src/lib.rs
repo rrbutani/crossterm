@@ -248,9 +248,6 @@ pub mod cursor;
 /// A module to apply attributes and colors on your text.
 #[cfg(not(target_arch = "wasm32"))]
 pub mod style;
-/// A module to work with the terminal.
-#[cfg(not(target_arch = "wasm32"))]
-pub mod terminal;
 
 not_wasm! {
     /// A module to query if the current instance is a tty.
@@ -262,6 +259,9 @@ not_wasm! {
 
 
 // The modules below work (in some capacity) on wasm targets.
+
+/// A module to work with the terminal.
+pub mod terminal;
 
 mod ansi;
 mod command;

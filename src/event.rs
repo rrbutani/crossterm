@@ -86,9 +86,11 @@ not_wasm! {
     use timeout::PollTimeout;
 }
 
-not_wasm! { use crate::{Command, Result}; }
+use crate::Command;
 
-#[cfg(not(target_arch = "wasm32"))] mod ansi;
+not_wasm! { use crate::Result; }
+
+mod ansi;
 
 not_wasm! {
     pub(crate) mod filter;
@@ -233,23 +235,21 @@ not_wasm! {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EnableMouseCapture;
 
-not_wasm!{
-    impl Command for EnableMouseCapture {
-        type AnsiType = &'static str;
+impl Command for EnableMouseCapture {
+    type AnsiType = &'static str;
 
-        fn ansi_code(&self) -> Self::AnsiType {
-            ansi::ENABLE_MOUSE_MODE_CSI_SEQUENCE
-        }
+    fn ansi_code(&self) -> Self::AnsiType {
+        ansi::ENABLE_MOUSE_MODE_CSI_SEQUENCE
+    }
 
-        #[cfg(windows)]
-        fn execute_winapi(&self) -> Result<()> {
-            sys::windows::enable_mouse_capture()
-        }
+    #[cfg(windows)]
+    fn execute_winapi(&self) -> Result<()> {
+        sys::windows::enable_mouse_capture()
+    }
 
-        #[cfg(windows)]
-        fn is_ansi_code_supported(&self) -> bool {
-            false
-        }
+    #[cfg(windows)]
+    fn is_ansi_code_supported(&self) -> bool {
+        false
     }
 }
 
@@ -259,23 +259,21 @@ not_wasm!{
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DisableMouseCapture;
 
-not_wasm!{
-    impl Command for DisableMouseCapture {
-        type AnsiType = &'static str;
+impl Command for DisableMouseCapture {
+    type AnsiType = &'static str;
 
-        fn ansi_code(&self) -> Self::AnsiType {
-            ansi::DISABLE_MOUSE_MODE_CSI_SEQUENCE
-        }
+    fn ansi_code(&self) -> Self::AnsiType {
+        ansi::DISABLE_MOUSE_MODE_CSI_SEQUENCE
+    }
 
-        #[cfg(windows)]
-        fn execute_winapi(&self) -> Result<()> {
-            sys::windows::disable_mouse_capture()
-        }
+    #[cfg(windows)]
+    fn execute_winapi(&self) -> Result<()> {
+        sys::windows::disable_mouse_capture()
+    }
 
-        #[cfg(windows)]
-        fn is_ansi_code_supported(&self) -> bool {
-            false
-        }
+    #[cfg(windows)]
+    fn is_ansi_code_supported(&self) -> bool {
+        false
     }
 }
 
