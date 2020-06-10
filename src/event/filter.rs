@@ -24,6 +24,7 @@ impl Filter for CursorPositionFilter {
 #[derive(Debug, Clone)]
 pub(crate) struct EventFilter;
 
+#[cfg(not(target_arch = "wasm32"))] // TODO!
 impl Filter for EventFilter {
     #[cfg(unix)]
     fn eval(&self, event: &InternalEvent) -> bool {

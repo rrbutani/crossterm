@@ -17,6 +17,7 @@ pub(crate) struct InternalEventReader {
     skipped_events: Vec<InternalEvent>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl Default for InternalEventReader {
     fn default() -> Self {
         #[cfg(windows)]

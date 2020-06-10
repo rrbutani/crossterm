@@ -70,17 +70,22 @@
 //! Check the [examples](https://github.com/crossterm-rs/crossterm/tree/master/examples) folder for more of
 //! them (`event-*`).
 
+#[cfg(not(target_arch = "wasm32"))] // TODO!
 use std::time::Duration;
 
+#[cfg(not(target_arch = "wasm32"))] // TODO!
 use parking_lot::RwLock;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 use bitflags::bitflags;
+#[cfg(not(target_arch = "wasm32"))] // TODO!
 use filter::{EventFilter, Filter};
+#[cfg(not(target_arch = "wasm32"))] // TODO!
 use lazy_static::lazy_static;
 #[cfg(feature = "event-stream")]
 pub use stream::EventStream;
+#[cfg(not(target_arch = "wasm32"))] // TODO!
 use timeout::PollTimeout;
 
 use crate::{Command, Result};
@@ -94,6 +99,7 @@ mod stream;
 pub(crate) mod sys;
 mod timeout;
 
+#[cfg(not(target_arch = "wasm32"))] // TODO!
 lazy_static! {
     /// Static instance of `InternalEventReader`.
     /// This needs to be static because there can be one event reader.
@@ -140,6 +146,7 @@ lazy_static! {
 ///     poll(Duration::from_millis(100))
 /// }
 /// ```
+#[cfg(not(target_arch = "wasm32"))] // TODO!
 pub fn poll(timeout: Duration) -> Result<bool> {
     poll_internal(Some(timeout), &EventFilter)
 }
@@ -183,6 +190,7 @@ pub fn poll(timeout: Duration) -> Result<bool> {
 ///     }
 /// }
 /// ```
+#[cfg(not(target_arch = "wasm32"))] // TODO!
 pub fn read() -> Result<Event> {
     match read_internal(&EventFilter)? {
         InternalEvent::Event(event) => Ok(event),
@@ -192,6 +200,7 @@ pub fn read() -> Result<Event> {
 }
 
 /// Polls to check if there are any `InternalEvent`s that can be read withing the given duration.
+#[cfg(not(target_arch = "wasm32"))] // TODO!
 pub(crate) fn poll_internal<F>(timeout: Option<Duration>, filter: &F) -> Result<bool>
 where
     F: Filter,
@@ -210,6 +219,7 @@ where
 }
 
 /// Reads a single `InternalEvent`.
+#[cfg(not(target_arch = "wasm32"))] // TODO!
 pub(crate) fn read_internal<F>(filter: &F) -> Result<InternalEvent>
 where
     F: Filter,
@@ -421,6 +431,6 @@ pub(crate) enum InternalEvent {
     /// An event.
     Event(Event),
     /// A cursor position (`col`, `row`).
-    #[cfg(unix)]
+    #[cfg(any(unix, target_arch = "wasm32"))]
     CursorPosition(u16, u16),
 }
