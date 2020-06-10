@@ -42,7 +42,11 @@
 //!
 //! For manual execution control check out [crossterm::queue](../macro.queue.html).
 
+#[cfg(not(target_arch = "wasm32"))]
 pub use sys::position;
+#[cfg(target_arch = "wasm32")]
+// pub use sys::position as xtermjs_position; // the wasm `position` function takes a `Terminal` arg // TODO: is this better?
+pub use sys::position as position; // the wasm `position` function takes a `Terminal` arg
 
 #[cfg(windows)]
 use crate::Result;

@@ -35,9 +35,11 @@ event-stream = ["futures-util"]
 [dependencies]
 bitflags = "1.2"
 lazy_static = "1.4"
-parking_lot = "0.10"
 futures-util = { version = "0.3", optional = true, default-features = false }
 serde = { version = "1.0", features = ["derive"], optional = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.winapi]
+parking_lot = "0.10"
 
 #
 # Windows dependencies
@@ -56,6 +58,12 @@ crossterm_winapi = "0.6.1"
 libc = "0.2"
 mio = {version="0.7", features=["os-poll"]}
 signal-hook = { version = "0.1.15", features = ["mio-0_7-support"] }
+
+#
+# WASM dependencies
+#
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+xterm-js-sys = { path = "/media/data/Documents/Development/Personal/Rust/web-tui/xterm-js-sys", version = "4.6.0-alpha0", features = ["crossterm-support"] }
 
 #
 # Dev dependencies (examples, ...)
