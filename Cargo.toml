@@ -38,7 +38,7 @@ lazy_static = "1.4"
 futures-util = { version = "0.3", optional = true, default-features = false }
 serde = { version = "1.0", features = ["derive"], optional = true }
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies.winapi]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 parking_lot = "0.10"
 
 #
@@ -63,7 +63,7 @@ signal-hook = { version = "0.1.15", features = ["mio-0_7-support"] }
 # WASM dependencies
 #
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-xterm-js-sys = { path = "/media/data/Documents/Development/Personal/Rust/web-tui/xterm-js-sys", version = "4.6.0-alpha0", features = ["crossterm-support"] }
+xterm-js-sys = { version = "4.6.0-alpha0", features = ["crossterm-support"] }
 
 #
 # Dev dependencies (examples, ...)
@@ -73,3 +73,7 @@ tokio = { version = "0.2.11", features = ["full"] }
 futures = "0.3"
 futures-timer = "3.0"
 async-std = "1.4"
+
+[patch.crates-io]
+wasm-bindgen = { git = "https://github.com/rrbutani/wasm-bindgen.git", branch = "patches" } # TODO: remove once things get merged!
+xterm-js-sys = { git = "https://github.com/rrbutani/xterm-js-sys.git" } # TODO: remove!
