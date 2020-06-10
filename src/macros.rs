@@ -36,7 +36,7 @@ macro_rules! handle_command {
                 command.execute_winapi().map_err($crate::ErrorKind::from)
             }
         }
-        #[cfg(unix)]
+        #[cfg(any(unix, target_arch = "wasm32"))]
         {
             write_ansi_code!($writer, $command.ansi_code())
         }
@@ -101,6 +101,58 @@ macro_rules! queue {
             .and_then(|()| $crate::handle_command!($writer, $command))
         )*
     }
+}
+
+// macro_rules! queue {
+//     ($writer:expr $(, $command:expr)* $(,)?) => {{
+//         #[cfg(not(target_arch = "wasm32"))]
+//         let res = {
+//             Ok(()) $(
+//                 .and_then(|()| $crate::handle_command!($writer, $command))
+//             )*
+//         };
+
+//         #[cfg(target_arch = "wasm32")]
+//         let res = {
+//             // Assert that the "writer" is an xterm.js Terminal.
+//             let term: &$crate::macro_support::Terminal = $writer;
+
+//             let mut buf = String::with_capacity($crate::count!($($command),*));
+
+//             Ok(()) $(
+//                 .and_then(|()| $crate::handle_command!(&mut buf, $command))
+//             )*
+//             .map(|()| {
+//                 term.write(buf)
+//             })
+//         };
+
+//         res
+//     }}
+// }
+
+#[macro_export]
+#[cfg(target_arch = "wasm32")]
+macro_rules! xtermjs_queue {
+    ($terminal:expr $(, $command:expr)* $(,)?) => {{
+        // 'Convert' a Terminal into the wrapper thing.
+        let term: &$crate::macro_support::Terminal: $terminal;
+        // let term: &$crate::macro_support::XtermJsCrosstermBackend = terminal.into();
+        let term = crate::macro_support::XtermJsCrosstermBackend::new_with_capacity(
+            term,
+            $crate::count!($($command),*) * 3,
+        );
+
+        $crate::queue!(&mut term $(, $command)*)
+    }};
+}
+
+/// Counts the number of exprs given.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! count {
+    ($(,)?) => { 0 };
+    ($(,)? $command:expr $(, $rest:tt)*) => { (1 + $crate::count!($($rest)*)) };
 }
 
 /// Executes one or more command(s).

@@ -234,6 +234,13 @@ pub use crate::{
     error::{ErrorKind, Result},
 };
 
+#[doc(hidden)]
+#[cfg(target_arch = "wasm32")]
+pub mod macro_support {
+    pub use xterm_js_sys::xterm::Terminal;
+    pub use xterm_js_sys::crossterm_support::XtermJsCrosstermBackend;
+}
+
 /// A module to work with the terminal cursor
 pub mod cursor;
 /// A module to read events.
