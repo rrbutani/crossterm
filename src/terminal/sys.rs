@@ -7,9 +7,15 @@ pub(crate) use self::windows::{
     clear, disable_raw_mode, enable_raw_mode, scroll_down, scroll_up, set_size, set_window_title,
     size,
 };
+#[cfg(target_arch = "wasm32")]
+pub use self::wasm::size;
+
 
 #[cfg(windows)]
 mod windows;
 
 #[cfg(unix)]
 mod unix;
+
+#[cfg(target_arch = "wasm32")]
+mod wasm;

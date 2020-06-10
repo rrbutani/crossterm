@@ -88,11 +88,14 @@ use serde::{Deserialize, Serialize};
 
 #[doc(no_inline)]
 use crate::Command;
-use crate::{impl_display, Result};
+use crate::{impl_display};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::Result;
 
 mod ansi;
 pub(crate) mod sys;
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Enables raw mode.
 ///
 /// Please have a look at the [raw mode](./#raw-mode) section.
@@ -100,6 +103,7 @@ pub fn enable_raw_mode() -> Result<()> {
     sys::enable_raw_mode()
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Disables raw mode.
 ///
 /// Please have a look at the [raw mode](./#raw-mode) section.
@@ -107,12 +111,18 @@ pub fn disable_raw_mode() -> Result<()> {
     sys::disable_raw_mode()
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Returns the terminal size `(columns, rows)`.
 ///
 /// The top left cell is represented `(1, 1)`.
 pub fn size() -> Result<(u16, u16)> {
     sys::size()
 }
+
+#[cfg(target_arch = "wasm32")]
+#[doc(inline)]
+// pub use sys::size as xtermjs_size; // TODO: is this better?
+pub use sys::size as size;
 
 /// A command that switches to alternate screen.
 ///
