@@ -1,6 +1,7 @@
 use crossterm_winapi::ConsoleMode;
 use winapi::um::wincon::ENABLE_VIRTUAL_TERMINAL_PROCESSING;
 
+#[cfg(not(target_arch = "wasm32"))]
 use lazy_static::lazy_static;
 
 use crate::Result;
@@ -33,9 +34,10 @@ pub(crate) fn set_virtual_terminal_processing(yes: bool) -> Result<()> {
     Ok(())
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 lazy_static! {
     static ref SUPPORTS_ANSI_ESCAPE_CODES: bool = {
-        // Some terminals on windows like GitBash can't use WinaApi calls directly
+        // Some terminals on windows like GitBash can't use WinApi calls directly
         // so when we try to enable the ANSI-flag for windows this won't work.
         // Because of that we should check first if the TERM-variable is set
         // and see if the current terminal is a terminal who does support ANSI.
@@ -50,8 +52,14 @@ lazy_static! {
     };
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub fn supports_ansi() -> bool {
     *SUPPORTS_ANSI_ESCAPE_CODES
+}
+
+#[cfg(target = "wasm32")]
+pub fn supports_ansi() -> bool {
+    true
 }
 
 // Checks if the 'TERM' environment variable is set to check if the terminal supports ANSI-codes.

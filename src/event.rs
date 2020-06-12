@@ -71,22 +71,24 @@
 //! them (`event-*`).
 
 #[cfg(not(target_arch = "wasm32"))] // TODO!
-use std::time::Duration;
+use {
+    std::time::Duration,
+    parking_lot::RwLock,
+    lazy_static::lazy_static,
+    timeout::PollTimeout,
 
-#[cfg(not(target_arch = "wasm32"))] // TODO!
-use parking_lot::RwLock;
+    filter::{EventFilter, Filter},
+};
+
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 use bitflags::bitflags;
-#[cfg(not(target_arch = "wasm32"))] // TODO!
-use filter::{EventFilter, Filter};
-#[cfg(not(target_arch = "wasm32"))] // TODO!
-use lazy_static::lazy_static;
+
+#[cfg(feature = "event-stream")]
+mod stream;
 #[cfg(feature = "event-stream")]
 pub use stream::EventStream;
-#[cfg(not(target_arch = "wasm32"))] // TODO!
-use timeout::PollTimeout;
 
 use crate::{Command, Result};
 
@@ -94,8 +96,6 @@ mod ansi;
 pub(crate) mod filter;
 mod read;
 mod source;
-#[cfg(feature = "event-stream")]
-mod stream;
 pub(crate) mod sys;
 mod timeout;
 
@@ -146,7 +146,7 @@ lazy_static! {
 ///     poll(Duration::from_millis(100))
 /// }
 /// ```
-#[cfg(not(target_arch = "wasm32"))] // TODO!
+#[cfg(not(target_arch = "wasm32"))]
 pub fn poll(timeout: Duration) -> Result<bool> {
     poll_internal(Some(timeout), &EventFilter)
 }
@@ -190,7 +190,7 @@ pub fn poll(timeout: Duration) -> Result<bool> {
 ///     }
 /// }
 /// ```
-#[cfg(not(target_arch = "wasm32"))] // TODO!
+#[cfg(not(target_arch = "wasm32"))]
 pub fn read() -> Result<Event> {
     match read_internal(&EventFilter)? {
         InternalEvent::Event(event) => Ok(event),
@@ -200,7 +200,7 @@ pub fn read() -> Result<Event> {
 }
 
 /// Polls to check if there are any `InternalEvent`s that can be read withing the given duration.
-#[cfg(not(target_arch = "wasm32"))] // TODO!
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn poll_internal<F>(timeout: Option<Duration>, filter: &F) -> Result<bool>
 where
     F: Filter,
@@ -219,7 +219,7 @@ where
 }
 
 /// Reads a single `InternalEvent`.
-#[cfg(not(target_arch = "wasm32"))] // TODO!
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn read_internal<F>(filter: &F) -> Result<InternalEvent>
 where
     F: Filter,
