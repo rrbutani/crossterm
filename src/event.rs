@@ -95,16 +95,16 @@ use crate::Command;
 use crate::Result;
 
 mod ansi;
-pub(crate) mod filter;
 pub(crate) mod sys;
 
+#[cfg(feature = "event-stream")]
+pub(crate) mod filter;
 #[cfg(not(target_arch = "wasm32"))]
 mod read;
 #[cfg(not(target_arch = "wasm32"))]
 mod source;
 #[cfg(not(target_arch = "wasm32"))]
 mod timeout;
-
 
 
 #[cfg(not(target_arch = "wasm32"))] // TODO!

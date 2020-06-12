@@ -19,31 +19,10 @@ use xterm_js_sys::{
 use crate::Result;
 
 use super::super::{
-    filter::EventFilter, Event, InternalEvent,
+    Event, InternalEvent,
     sys::unix::parse::parse_event, // TODO: spin out parse instead...
 };
 
-// // Since we're single threaded/cooperatively scheduled we shouldn't actually
-// // need a RwLock here (because we don't hold the lock across suspend points),
-// // but w/e. This lock is supposed to work on wasm.
-// static WAKER: RwLock<RawRwLock, Option<Waker>> = RwLock::const_new(
-//     <RawRwLock as RawRwLockTrait>::INIT,
-//     None,
-// );
-
-// Actually let's not put this in a global variable (since we _could_ have
-// multiple terminals running at a time).
-//
-// Downside is that we have no way to detect when we're re-registering an
-// EventStream on a Terminal.
-
-// impl Drop for EventStream {
-//    fn drop(&mut self) {
-//        let _ = WAKER.write().unwrap().take();
-//    }
-// }
-
-// type RwLock<T> = ParkingLogRwLock<RawRwLock, T>;
 type RwLock<T> = StdRwLock<T>;
 
 #[derive(Debug)]
@@ -77,7 +56,7 @@ impl<'t> EventStream<'t> {
     // Warning: This does not check if the terminal already has an event stream
     // registered to it. If it does, registering a new EventStream to the
     // terminal will break the existing EventStream.
-    fn new(term: &'t Terminal) -> Self {
+    pub fn new(term: &'t Terminal) -> Self {
         let waker = Arc::new(RwLock::new(None));
         let events = Arc::new(RwLock::new(VecDeque::with_capacity(64)));
 
@@ -85,12 +64,14 @@ impl<'t> EventStream<'t> {
             let (waker, events) = (waker.clone(), events.clone());
 
             let clos: Box<dyn FnMut(_)> = Box::new(move |data: Str| {
-                let events = events.write().unwrap();
-                let buffer = Vec::with_capacity(10);
+                let mut events = events.write().unwrap();
+                let mut buffer = Vec::with_capacity(10);
                 let bytes = data.as_bytes();
 
                 for (idx, byte) in bytes.iter().enumerate() {
                     let more = idx + 1 < bytes.len();
+                    buffer.push(*byte);
+
                     match parse_event(&buffer, more) {
                         Ok(Some(ev)) => {
                             events.push_back(Ok(ev));
@@ -107,41 +88,29 @@ impl<'t> EventStream<'t> {
                     }
                 }
 
-                waker.read().unwrap().as_ref().map(|w| w.wake_by_ref())
+                waker.read().unwrap().as_ref().map(|w: &Waker| w.wake_by_ref());
             });
             let clos = Closure::wrap(clos);
+            let handle = term.on_data(&clos).into();
 
-            (clos, term.on_data(&clos).into())
+            (clos, handle)
         };
 
         let (resize_event_closure, resize_event_listener_handle) = {
             let (waker, events) = (waker.clone(), events.clone());
             let clos: Box<dyn FnMut(_)> = Box::new(move |ev: ResizeEventData| {
-                let events = events.write().unwrap();
-                events.push_back(Ok(Event::Resize(ev.cols(), ev.rows())));
+                let mut events = events.write().unwrap();
+                events.push_back(Ok(
+                    InternalEvent::Event(Event::Resize(ev.cols(), ev.rows()))
+                ));
 
-                waker.read().unwrap().as_ref().map(|w| w.wake_by_ref())
+                waker.read().unwrap().as_ref().map(|w| w.wake_by_ref());
             });
             let clos = Closure::wrap(clos);
+            let handle = term.on_resize(&clos).into();
 
-            (clos, term.on_resize(&clos).into())
+            (clos, handle)
         };
-
-        // let data_waker = waker.clone();
-        // let data_event_closure: Box<dyn FnMut(Str)> = Box::new(move |data: Str| {
-
-        //     data_waker.read().unwrap().as_ref().map(|w| w.wake_by_ref());
-        // });
-        // let data_event_closure = Closure::wrap(data_event_closure);
-        // let data_event_listener_handle = term.on_data(&data_event_closure);
-
-        // let resize_waker = waker.clone();
-        // let resize_event_closure: Box<dyn FnMut(ResizeEventData)> = Box::new(move |ev: ResizeEventData| {
-
-        //     resize_waker.read().unwrap().as_ref().map(|w| w.wake_by_ref());
-        // });
-        // let resize_event_closure = Closure::wrap(resize_event_closure);
-        // let resize_event_listener_handle = term.on_resize(&resize_event_closure);
 
         Self {
             data_event_listener_handle,
@@ -161,12 +130,12 @@ impl<'t> EventStream<'t> {
 impl<'t> Stream for EventStream<'t> {
     type Item = Result<Event>;
 
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         if self.waker.read().unwrap().is_none() {
             *self.waker.write().unwrap() = Some(cx.waker().clone())
         }
 
-        let events = self.waker.write().unwrap();
+        let mut events = self.events.write().unwrap();
 
         // Filter out CursorPosition events here:
         loop {
@@ -174,13 +143,6 @@ impl<'t> Stream for EventStream<'t> {
                 Some(Err(err)) => break Poll::Ready(Some(Err(err))),
                 Some(Ok(InternalEvent::Event(ev))) => break Poll::Ready(Some(Ok(ev))),
                 Some(Ok(InternalEvent::CursorPosition(_, _))) => continue,
-                // Some(Ok(ev)) => {
-                //     if EventFilter.eval(&ev) {
-                //         break Poll::Ready(Some(Ok(ev)))
-                //     } else {
-                //         continue
-                //     }
-                // }
                 None => break Poll::Pending,
             }
         }
