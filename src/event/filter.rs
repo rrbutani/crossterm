@@ -6,11 +6,11 @@ pub(crate) trait Filter: Send + Sync + 'static {
     fn eval(&self, event: &InternalEvent) -> bool;
 }
 
-#[cfg(unix)]
+#[cfg(any(unix, target_arch = "wasm32"))]
 #[derive(Debug, Clone)]
 pub(crate) struct CursorPositionFilter;
 
-#[cfg(unix)]
+#[cfg(any(unix, target_arch = "wasm32"))]
 impl Filter for CursorPositionFilter {
     fn eval(&self, event: &InternalEvent) -> bool {
         if let InternalEvent::CursorPosition(_, _) = *event {
@@ -24,9 +24,8 @@ impl Filter for CursorPositionFilter {
 #[derive(Debug, Clone)]
 pub(crate) struct EventFilter;
 
-#[cfg(not(target_arch = "wasm32"))] // TODO!
 impl Filter for EventFilter {
-    #[cfg(unix)]
+    #[cfg(any(unix, target_arch = "wasm32"))]
     fn eval(&self, event: &InternalEvent) -> bool {
         if let InternalEvent::Event(_) = *event {
             true

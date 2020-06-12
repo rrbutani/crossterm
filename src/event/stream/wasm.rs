@@ -2,17 +2,17 @@ use std::{
     collections::VecDeque,
     pin::Pin,
     task::{Context, Poll, Waker},
-    sync::Arc,
+    sync::{Arc, RwLock as StdRwLock},
 };
 
 use futures::Stream;
-use parking_log::{
-    lock_api::{RawRwLock as RawRwLockTrait, RwLock},
-    RawRwLock,
-};
+// use parking_log::{
+//     lock_api::{RawRwLock as RawRwLockTrait, RwLock as ParkingLogRwLock},
+//     RawRwLock,
+// };
 use wasm_bindgen::prelude::Closure;
 use xterm_js_sys::{
-    xterm::{Disposable, Str, Terminal},
+    xterm::{Disposable, ResizeEventData, Str, Terminal},
     ext::disposable::DisposableWrapper,
 };
 
@@ -43,6 +43,9 @@ use super::super::{
 //    }
 // }
 
+// type RwLock<T> = ParkingLogRwLock<RawRwLock, T>;
+type RwLock<T> = StdRwLock<T>;
+
 #[derive(Debug)]
 pub struct EventStream<'t> {
     // On `Drop` this will automatically get unregistered.
@@ -54,7 +57,7 @@ pub struct EventStream<'t> {
     data_event_closure: Closure<dyn FnMut(Str)>,
     resize_event_closure: Closure<dyn FnMut(ResizeEventData)>,
 
-    waker: Arc<RwLock<RawRwLock, Option<Waker>>>,
+    waker: Arc<RwLock<Option<Waker>>>,
     events: Arc<RwLock<VecDeque<Result<InternalEvent>>>>,
 
     terminal: &'t Terminal,
@@ -108,20 +111,20 @@ impl<'t> EventStream<'t> {
             });
             let clos = Closure::wrap(clos);
 
-            (clos, term.on_data(&clos))
+            (clos, term.on_data(&clos).into())
         };
 
         let (resize_event_closure, resize_event_listener_handle) = {
             let (waker, events) = (waker.clone(), events.clone());
             let clos: Box<dyn FnMut(_)> = Box::new(move |ev: ResizeEventData| {
                 let events = events.write().unwrap();
-                events.push_back(Ok(Event::Resize((ev.cols(), ev.rows()))));
+                events.push_back(Ok(Event::Resize(ev.cols(), ev.rows())));
 
                 waker.read().unwrap().as_ref().map(|w| w.wake_by_ref())
             });
             let clos = Closure::wrap(clos);
 
-            (clos, term.on_resize(&clos))
+            (clos, term.on_resize(&clos).into())
         };
 
         // let data_waker = waker.clone();
@@ -155,7 +158,7 @@ impl<'t> EventStream<'t> {
     }
 }
 
-impl Stream for EventStream {
+impl<'t> Stream for EventStream<'t> {
     type Item = Result<Event>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
@@ -171,6 +174,13 @@ impl Stream for EventStream {
                 Some(Err(err)) => break Poll::Ready(Some(Err(err))),
                 Some(Ok(InternalEvent::Event(ev))) => break Poll::Ready(Some(Ok(ev))),
                 Some(Ok(InternalEvent::CursorPosition(_, _))) => continue,
+                // Some(Ok(ev)) => {
+                //     if EventFilter.eval(&ev) {
+                //         break Poll::Ready(Some(Ok(ev)))
+                //     } else {
+                //         continue
+                //     }
+                // }
                 None => break Poll::Pending,
             }
         }

@@ -90,14 +90,22 @@ mod stream;
 #[cfg(feature = "event-stream")]
 pub use stream::EventStream;
 
-use crate::{Command, Result};
+use crate::Command;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::Result;
 
 mod ansi;
 pub(crate) mod filter;
-mod read;
-mod source;
 pub(crate) mod sys;
+
+#[cfg(not(target_arch = "wasm32"))]
+mod read;
+#[cfg(not(target_arch = "wasm32"))]
+mod source;
+#[cfg(not(target_arch = "wasm32"))]
 mod timeout;
+
+
 
 #[cfg(not(target_arch = "wasm32"))] // TODO!
 lazy_static! {

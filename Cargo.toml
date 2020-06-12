@@ -40,6 +40,7 @@ serde = { version = "1.0", features = ["derive"], optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 parking_lot = "0.10"
+lazy_static = "1.4"
 
 #
 # Windows dependencies
@@ -63,7 +64,8 @@ signal-hook = { version = "0.1.15", features = ["mio-0_7-support"] }
 # WASM dependencies
 #
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-xterm-js-sys = { version = "4.6.0-alpha0", features = ["crossterm-support"] }
+xterm-js-sys = { version = "4.6.0-alpha0", features = ["crossterm-support", "ext"] }
+wasm-bindgen = "0.2.63"
 
 #
 # Dev dependencies (examples, ...)

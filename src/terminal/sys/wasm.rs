@@ -4,7 +4,7 @@ use crate::Result;
 
 use xterm_js_sys::xterm::Terminal;
 
-// pub(crate) fn is_raw_mode_enabled() -> bool { true }
+pub(crate) fn is_raw_mode_enabled() -> bool { true }
 
 /// Returns the terminal size `(columns, rows)`.
 ///

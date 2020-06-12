@@ -88,7 +88,7 @@ use serde::{Deserialize, Serialize};
 
 #[doc(no_inline)]
 use crate::Command;
-use crate::{impl_display};
+use crate::impl_display;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::Result;
 
