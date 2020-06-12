@@ -5,11 +5,7 @@ use std::{
     sync::{Arc, RwLock as StdRwLock},
 };
 
-use futures::Stream;
-// use parking_log::{
-//     lock_api::{RawRwLock as RawRwLockTrait, RwLock as ParkingLogRwLock},
-//     RawRwLock,
-// };
+use futures_core::Stream;
 use wasm_bindgen::prelude::Closure;
 use xterm_js_sys::{
     xterm::{Disposable, ResizeEventData, Str, Terminal},

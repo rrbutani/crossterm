@@ -8,7 +8,7 @@ use std::{
     time::Duration,
 };
 
-use futures::{
+use futures_core::{
     task::{Context, Poll},
     Stream,
 };
@@ -25,7 +25,7 @@ use super::super::{
 /// **This type is not available by default. You have to use the `event-stream` feature flag
 /// to make it available.**
 ///
-/// It implements the [`futures::stream::Stream`](https://docs.rs/futures/0.3.1/futures/stream/trait.Stream.html)
+/// It implements the [`futures_core::stream::Stream`](https://docs.rs/futures_core/0.3/futures_core/stream/trait.Stream.html)
 /// trait and allows you to receive `Event`s with [`async-std`](https://crates.io/crates/async-std)
 /// or [`tokio`](https://crates.io/crates/tokio) crates.
 ///
@@ -59,7 +59,7 @@ impl EventStream {
 //
 // We need two wakers in order to implement EventStream correctly.
 //
-// 1. futures::Stream waker
+// 1. futures_core::stream::Stream waker
 //
 // Stream::poll_next can return Poll::Pending which means that there's no
 // event available. We are going to spawn a thread with the
