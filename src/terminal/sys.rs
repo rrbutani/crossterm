@@ -9,7 +9,7 @@ pub(crate) use self::windows::{
 };
 #[cfg(target_arch = "wasm32")]
 pub use self::wasm::size;
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", feature = "event-stream"))]
 pub(crate) use self::wasm::is_raw_mode_enabled;
 
 

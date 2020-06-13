@@ -97,7 +97,6 @@ use crate::Result;
 mod ansi;
 pub(crate) mod sys;
 
-#[cfg(feature = "event-stream")]
 pub(crate) mod filter;
 #[cfg(not(target_arch = "wasm32"))]
 mod read;
