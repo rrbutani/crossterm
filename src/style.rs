@@ -110,7 +110,7 @@
 //! );
 //! ```
 
-use std::{env, fmt::Display};
+use std::fmt::Display;
 
 #[cfg(windows)]
 use crate::Result;
@@ -182,10 +182,16 @@ impl<'a> Styler<&'a str> for &'a str {
 /// # Notes
 ///
 /// This does not always provide a good result.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn available_color_count() -> u16 {
-    env::var("TERM")
+    std::env::var("TERM")
         .map(|x| if x.contains("256color") { 256 } else { 8 })
         .unwrap_or(8)
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn available_color_count() -> u16 {
+    256
 }
 
 /// A command that sets the the foreground color.
