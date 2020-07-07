@@ -8,7 +8,7 @@ use std::{
 };
 
 use futures_timer::Delay;
-use futures_util::{future::FutureExt, select, StreamExt};
+use futures::util::{future::FutureExt, select, StreamExt};
 
 use crossterm::{
     cursor::position,
