@@ -13,11 +13,7 @@ pub(crate) struct CursorPositionFilter;
 #[cfg(any(unix, target_arch = "wasm32"))] // Not actually used on wasm, but w/e
 impl Filter for CursorPositionFilter {
     fn eval(&self, event: &InternalEvent) -> bool {
-        if let InternalEvent::CursorPosition(_, _) = *event {
-            true
-        } else {
-            false
-        }
+        matches!(*event, InternalEvent::CursorPosition(_, _))
     }
 }
 
@@ -27,11 +23,7 @@ pub(crate) struct EventFilter;
 impl Filter for EventFilter {
     #[cfg(any(unix, target_arch = "wasm32"))] // Not actually used on wasm, but w/e
     fn eval(&self, event: &InternalEvent) -> bool {
-        if let InternalEvent::Event(_) = *event {
-            true
-        } else {
-            false
-        }
+        matches!(*event, InternalEvent::Event(_))
     }
 
     #[cfg(windows)]

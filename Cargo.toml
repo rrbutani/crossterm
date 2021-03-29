@@ -1,8 +1,8 @@
 [package]
 name = "crossterm"
-version = "0.17.7"
+version = "0.18.2"
 authors = ["T. Post"]
-description = "An crossplatform terminal library for manipulating terminals."
+description = "A crossplatform terminal library for manipulating terminals."
 repository = "https://github.com/crossterm-rs/crossterm"
 documentation = "https://docs.rs/crossterm/"
 license = "MIT"
@@ -35,30 +35,31 @@ event-stream = ["futures-core"]
 [dependencies]
 bitflags = "1.2"
 lazy_static = "1.4"
-futures-util = { version = "0.3", optional = true, default-features = false }
+
+# optional deps only added when requested
+futures-core = { version = "0.3", optional = true, default-features = false }
 serde = { version = "1.0", features = ["derive"], optional = true }
-futures-core = { version = "0.3", optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-parking_lot = "0.10"
+parking_lot = "0.11"
 lazy_static = "1.4"
 
 #
 # Windows dependencies
 #
 [target.'cfg(windows)'.dependencies.winapi]
-version = "0.3.8"
+version = "0.3.9"
 features = ["winuser"]
 
 [target.'cfg(windows)'.dependencies]
-crossterm_winapi = "0.6.1"
+crossterm_winapi = "0.7.0"
 
 #
 # UNIX dependencies
 #
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
-mio = {version="0.7", features=["os-poll"]}
+mio = { version="0.7", features=["os-poll"] }
 signal-hook = { version = "0.1.15", features = ["mio-0_7-support"] }
 
 #
@@ -72,11 +73,22 @@ wasm-bindgen = "0.2.63"
 # Dev dependencies (examples, ...)
 #
 [dev-dependencies]
-tokio = { version = "0.2.11", features = ["full"] }
+tokio = { version = "1.0", features = ["full"] }
 futures = "0.3"
 futures-timer = "3.0"
 async-std = "1.4"
 
 [patch.crates-io]
 wasm-bindgen = { git = "https://github.com/rrbutani/wasm-bindgen.git", branch = "patches" } # TODO: remove once things get merged!
-xterm-js-sys = { git = "https://github.com/rrbutani/xterm-js-sys.git" } # TODO: remove!
+# xterm-js-sys = { git = "https://github.com/rrbutani/xterm-js-sys.git", branch = "main" } # TODO: remove!
+
+#
+# Examples
+#
+[[example]]
+name = "event-stream-async-std"
+required-features = ["event-stream"]
+
+[[example]]
+name = "event-stream-tokio"
+required-features = ["event-stream"]

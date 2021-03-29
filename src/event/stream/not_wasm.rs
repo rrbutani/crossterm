@@ -2,8 +2,10 @@ use std::{
     pin::Pin,
     sync::{
         atomic::{AtomicBool, Ordering},
+        mpsc::{self, SyncSender},
         Arc,
     },
+    task::{Context, Poll},
     thread,
     time::Duration,
 };
@@ -25,7 +27,7 @@ use super::super::{
 /// **This type is not available by default. You have to use the `event-stream` feature flag
 /// to make it available.**
 ///
-/// It implements the [`futures_core::stream::Stream`](https://docs.rs/futures_core/0.3/futures_core/stream/trait.Stream.html)
+/// It implements the [`futures::stream::Stream`](https://docs.rs/futures/0.3.1/futures/stream/trait.Stream.html)
 /// trait and allows you to receive `Event`s with [`async-std`](https://crates.io/crates/async-std)
 /// or [`tokio`](https://crates.io/crates/tokio) crates.
 ///
@@ -34,16 +36,37 @@ use super::super::{
 #[derive(Debug)]
 pub struct EventStream {
     poll_internal_waker: Waker,
-    stream_wake_thread_spawned: Arc<AtomicBool>,
-    stream_wake_thread_should_shutdown: Arc<AtomicBool>,
+    stream_wake_task_executed: Arc<AtomicBool>,
+    stream_wake_task_should_shutdown: Arc<AtomicBool>,
+    task_sender: SyncSender<Task>,
 }
 
 impl Default for EventStream {
     fn default() -> Self {
+        let (task_sender, receiver) = mpsc::sync_channel::<Task>(1);
+
+        thread::spawn(move || {
+            while let Ok(task) = receiver.recv() {
+                loop {
+                    if let Ok(true) = poll_internal(None, &EventFilter) {
+                        break;
+                    }
+
+                    if task.stream_wake_task_should_shutdown.load(Ordering::SeqCst) {
+                        break;
+                    }
+                }
+                task.stream_wake_task_executed
+                    .store(false, Ordering::SeqCst);
+                task.stream_waker.wake();
+            }
+        });
+
         EventStream {
             poll_internal_waker: INTERNAL_EVENT_READER.write().waker(),
-            stream_wake_thread_spawned: Arc::new(AtomicBool::new(false)),
-            stream_wake_thread_should_shutdown: Arc::new(AtomicBool::new(false)),
+            stream_wake_task_executed: Arc::new(AtomicBool::new(false)),
+            stream_wake_task_should_shutdown: Arc::new(AtomicBool::new(false)),
+            task_sender,
         }
     }
 }
@@ -55,11 +78,17 @@ impl EventStream {
     }
 }
 
+struct Task {
+    stream_waker: std::task::Waker,
+    stream_wake_task_executed: Arc<AtomicBool>,
+    stream_wake_task_should_shutdown: Arc<AtomicBool>,
+}
+
 // Note to future me
 //
 // We need two wakers in order to implement EventStream correctly.
 //
-// 1. futures_core::stream::Stream waker
+// 1. futures::Stream waker
 //
 // Stream::poll_next can return Poll::Pending which means that there's no
 // event available. We are going to spawn a thread with the
@@ -86,28 +115,20 @@ impl Stream for EventStream {
             },
             Ok(false) => {
                 if !self
-                    .stream_wake_thread_spawned
+                    .stream_wake_task_executed
                     .compare_and_swap(false, true, Ordering::SeqCst)
                 {
                     let stream_waker = cx.waker().clone();
-                    let stream_wake_thread_spawned = self.stream_wake_thread_spawned.clone();
-                    let stream_wake_thread_should_shutdown =
-                        self.stream_wake_thread_should_shutdown.clone();
+                    let stream_wake_task_executed = self.stream_wake_task_executed.clone();
+                    let stream_wake_task_should_shutdown =
+                        self.stream_wake_task_should_shutdown.clone();
 
-                    stream_wake_thread_should_shutdown.store(false, Ordering::SeqCst);
+                    stream_wake_task_should_shutdown.store(false, Ordering::SeqCst);
 
-                    thread::spawn(move || {
-                        loop {
-                            if let Ok(true) = poll_internal(None, &EventFilter) {
-                                break;
-                            }
-
-                            if stream_wake_thread_should_shutdown.load(Ordering::SeqCst) {
-                                break;
-                            }
-                        }
-                        stream_wake_thread_spawned.store(false, Ordering::SeqCst);
-                        stream_waker.wake();
+                    let _ = self.task_sender.send(Task {
+                        stream_waker,
+                        stream_wake_task_executed,
+                        stream_wake_task_should_shutdown,
                     });
                 }
                 Poll::Pending
@@ -120,7 +141,7 @@ impl Stream for EventStream {
 
 impl Drop for EventStream {
     fn drop(&mut self) {
-        self.stream_wake_thread_should_shutdown
+        self.stream_wake_task_should_shutdown
             .store(true, Ordering::SeqCst);
         let _ = self.poll_internal_waker.wake();
     }

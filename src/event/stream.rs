@@ -11,4 +11,3 @@ mod wasm;
 #[cfg(target_arch = "wasm32")]
 #[doc(inline)]
 pub use wasm::EventStream;
-

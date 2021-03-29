@@ -15,6 +15,8 @@
 //! * use the [`read`](fn.read.html) & [`poll`](fn.poll.html) functions on any, but same, thread
 //! * or the [`EventStream`](struct.EventStream.html).
 //!
+//! **Make sure to enable raw mode in order for keyboard events to work properly**
+//!
 //! ## Mouse Events
 //!
 //! Mouse events are not enabled by default. You have to enable them with the
@@ -70,29 +72,29 @@
 //! Check the [examples](https://github.com/crossterm-rs/crossterm/tree/master/examples) folder for more of
 //! them (`event-*`).
 
-#[cfg(not(target_arch = "wasm32"))] // TODO!
-use {
-    std::time::Duration,
-    parking_lot::RwLock,
-    lazy_static::lazy_static,
-    timeout::PollTimeout,
-
-    filter::{EventFilter, Filter},
-};
+use std::fmt;
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::Duration;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 use bitflags::bitflags;
+#[cfg(not(target_arch = "wasm32"))]
+use parking_lot::{MappedMutexGuard, Mutex, MutexGuard};
 
-#[cfg(feature = "event-stream")]
-mod stream;
-#[cfg(feature = "event-stream")]
-pub use stream::EventStream;
-
-use crate::Command;
+use crate::Command; 
 #[cfg(not(target_arch = "wasm32"))]
 use crate::Result;
+
+#[cfg(not(target_arch = "wasm32"))]
+use filter::{EventFilter, Filter};
+#[cfg(not(target_arch = "wasm32"))]
+use read::InternalEventReader;
+#[cfg(all(feature = "event-stream", not(target_arch = "wasm32")))]
+pub use stream::EventStream;
+#[cfg(not(target_arch = "wasm32"))]
+use timeout::PollTimeout;
 
 mod ansi;
 pub(crate) mod sys;
@@ -107,10 +109,23 @@ mod timeout;
 
 
 #[cfg(not(target_arch = "wasm32"))] // TODO!
-lazy_static! {
-    /// Static instance of `InternalEventReader`.
-    /// This needs to be static because there can be one event reader.
-    static ref INTERNAL_EVENT_READER: RwLock<read::InternalEventReader> = RwLock::new(read::InternalEventReader::default());
+static INTERNAL_EVENT_READER: Mutex<Option<InternalEventReader>> = parking_lot::const_mutex(None);
+
+#[cfg(not(target_arch = "wasm32"))]
+fn lock_internal_event_reader() -> MappedMutexGuard<'static, InternalEventReader> {
+    MutexGuard::map(INTERNAL_EVENT_READER.lock(), |reader| {
+        reader.get_or_insert_with(InternalEventReader::default)
+    })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn try_lock_internal_event_reader_for(
+    duration: Duration,
+) -> Option<MappedMutexGuard<'static, InternalEventReader>> {
+    Some(MutexGuard::map(
+        INTERNAL_EVENT_READER.try_lock_for(duration)?,
+        |reader| reader.get_or_insert_with(InternalEventReader::default),
+    ))
 }
 
 /// Checks if there is an [`Event`](enum.Event.html) available.
@@ -206,7 +221,7 @@ pub fn read() -> Result<Event> {
     }
 }
 
-/// Polls to check if there are any `InternalEvent`s that can be read withing the given duration.
+/// Polls to check if there are any `InternalEvent`s that can be read within the given duration.
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn poll_internal<F>(timeout: Option<Duration>, filter: &F) -> Result<bool>
 where
@@ -214,13 +229,13 @@ where
 {
     let (mut reader, timeout) = if let Some(timeout) = timeout {
         let poll_timeout = PollTimeout::new(Some(timeout));
-        if let Some(reader) = INTERNAL_EVENT_READER.try_write_for(timeout) {
+        if let Some(reader) = try_lock_internal_event_reader_for(timeout) {
             (reader, poll_timeout.leftover())
         } else {
             return Ok(false);
         }
     } else {
-        (INTERNAL_EVENT_READER.write(), None)
+        (lock_internal_event_reader(), None)
     };
     reader.poll(timeout, filter)
 }
@@ -231,7 +246,7 @@ pub(crate) fn read_internal<F>(filter: &F) -> Result<InternalEvent>
 where
     F: Filter,
 {
-    let mut reader = INTERNAL_EVENT_READER.write();
+    let mut reader = lock_internal_event_reader();
     reader.read(filter)
 }
 
@@ -242,14 +257,12 @@ where
 pub struct EnableMouseCapture;
 
 impl Command for EnableMouseCapture {
-    type AnsiType = &'static str;
-
-    fn ansi_code(&self) -> Self::AnsiType {
-        ansi::ENABLE_MOUSE_MODE_CSI_SEQUENCE
+    fn write_ansi(&self, f: &mut impl fmt::Write) -> fmt::Result {
+        f.write_str(ansi::ENABLE_MOUSE_MODE_CSI_SEQUENCE)
     }
 
     #[cfg(windows)]
-    fn execute_winapi(&self) -> Result<()> {
+    fn execute_winapi(&self, _writer: impl FnMut() -> Result<()>) -> Result<()> {
         sys::windows::enable_mouse_capture()
     }
 
@@ -266,14 +279,12 @@ impl Command for EnableMouseCapture {
 pub struct DisableMouseCapture;
 
 impl Command for DisableMouseCapture {
-    type AnsiType = &'static str;
-
-    fn ansi_code(&self) -> Self::AnsiType {
-        ansi::DISABLE_MOUSE_MODE_CSI_SEQUENCE
+    fn write_ansi(&self, f: &mut impl fmt::Write) -> fmt::Result {
+        f.write_str(ansi::DISABLE_MOUSE_MODE_CSI_SEQUENCE)
     }
 
     #[cfg(windows)]
-    fn execute_winapi(&self) -> Result<()> {
+    fn execute_winapi(&self, _writer: impl FnMut() -> Result<()>) -> Result<()> {
         sys::windows::disable_mouse_capture()
     }
 
@@ -292,6 +303,7 @@ pub enum Event {
     /// A single mouse event with additional pressed modifiers.
     Mouse(MouseEvent),
     /// An resize event with new dimensions after resize (columns, rows).
+    /// **Note** that resize events can be occur in batches.
     Resize(u16, u16),
 }
 
@@ -302,7 +314,7 @@ pub enum Event {
 /// ## Mouse Buttons
 ///
 /// Some platforms/terminals do not report mouse button for the
-/// `MouseEvent::Up` and `MouseEvent::Drag` events. `MouseButton::Left`
+/// `MouseEventKind::Up` and `MouseEventKind::Drag` events. `MouseButton::Left`
 /// is returned if we don't know which button was used.
 ///
 /// ## Key Modifiers
@@ -312,27 +324,41 @@ pub enum Event {
 /// `Ctrl` + left mouse button click as a right mouse button click.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialOrd, PartialEq, Eq, Clone, Copy, Hash)]
-pub enum MouseEvent {
-    /// Pressed mouse button.
-    ///
-    /// Contains mouse button, pressed pointer location (column, row), and additional key modifiers.
-    Down(MouseButton, u16, u16, KeyModifiers),
-    /// Released mouse button.
-    ///
-    /// Contains mouse button, released pointer location (column, row), and additional key modifiers.
-    Up(MouseButton, u16, u16, KeyModifiers),
-    /// Moved mouse pointer while pressing a mouse button.
-    ///
-    /// Contains the pressed mouse button, released pointer location (column, row), and additional key modifiers.
-    Drag(MouseButton, u16, u16, KeyModifiers),
+pub struct MouseEvent {
+    /// The kind of mouse event that was caused.
+    pub kind: MouseEventKind,
+    /// The column that the event occurred on.
+    pub column: u16,
+    /// The row that the event occurred on.
+    pub row: u16,
+    /// The key modifiers active when the event occurred.
+    pub modifiers: KeyModifiers,
+}
+
+/// A mouse event kind.
+///
+/// # Platform-specific Notes
+///
+/// ## Mouse Buttons
+///
+/// Some platforms/terminals do not report mouse button for the
+/// `MouseEventKind::Up` and `MouseEventKind::Drag` events. `MouseButton::Left`
+/// is returned if we don't know which button was used.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, PartialOrd, PartialEq, Eq, Clone, Copy, Hash)]
+pub enum MouseEventKind {
+    /// Pressed mouse button. Contains the button that was pressed.
+    Down(MouseButton),
+    /// Released mouse button. Contains the button that was released.
+    Up(MouseButton),
+    /// Moved the mouse cursor while pressing the contained mouse button.
+    Drag(MouseButton),
+    /// Moved the mouse cursor while not pressing a mouse button.
+    Moved,
     /// Scrolled mouse wheel downwards (towards the user).
-    ///
-    /// Contains the scroll location (column, row), and additional key modifiers.
-    ScrollDown(u16, u16, KeyModifiers),
+    ScrollDown,
     /// Scrolled mouse wheel upwards (away from the user).
-    ///
-    /// Contains the scroll location (column, row), and additional key modifiers.
-    ScrollUp(u16, u16, KeyModifiers),
+    ScrollUp,
 }
 
 /// Represents a mouse button.
