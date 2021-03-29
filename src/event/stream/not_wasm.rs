@@ -18,8 +18,8 @@ use futures_core::{
 use crate::Result;
 
 use super::super::{
-    filter::EventFilter, poll_internal, read_internal, sys::Waker, Event, InternalEvent,
-    INTERNAL_EVENT_READER,
+    filter::EventFilter, lock_internal_event_reader, poll_internal, read_internal, sys::Waker,
+    Event, InternalEvent,
 };
 
 /// A stream of `Result<Event>`.
@@ -63,7 +63,7 @@ impl Default for EventStream {
         });
 
         EventStream {
-            poll_internal_waker: INTERNAL_EVENT_READER.write().waker(),
+            poll_internal_waker: lock_internal_event_reader().waker(),
             stream_wake_task_executed: Arc::new(AtomicBool::new(false)),
             stream_wake_task_should_shutdown: Arc::new(AtomicBool::new(false)),
             task_sender,
@@ -116,7 +116,9 @@ impl Stream for EventStream {
             Ok(false) => {
                 if !self
                     .stream_wake_task_executed
-                    .compare_and_swap(false, true, Ordering::SeqCst)
+                    .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+                    // https://github.com/rust-lang/rust/issues/80486#issuecomment-752244166
+                    .unwrap_or_else(|x| x)
                 {
                     let stream_waker = cx.waker().clone();
                     let stream_wake_task_executed = self.stream_wake_task_executed.clone();

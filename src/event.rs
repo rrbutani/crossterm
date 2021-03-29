@@ -83,7 +83,7 @@ use bitflags::bitflags;
 #[cfg(not(target_arch = "wasm32"))]
 use parking_lot::{MappedMutexGuard, Mutex, MutexGuard};
 
-use crate::Command; 
+use crate::{csi, Command}; 
 #[cfg(not(target_arch = "wasm32"))]
 use crate::Result;
 
@@ -96,9 +96,6 @@ pub use stream::EventStream;
 #[cfg(not(target_arch = "wasm32"))]
 use timeout::PollTimeout;
 
-mod ansi;
-pub(crate) mod sys;
-
 pub(crate) mod filter;
 #[cfg(not(target_arch = "wasm32"))]
 mod read;
@@ -107,7 +104,8 @@ mod source;
 #[cfg(not(target_arch = "wasm32"))]
 mod timeout;
 
-
+/// Static instance of `InternalEventReader`.
+/// This needs to be static because there can be one event reader.
 #[cfg(not(target_arch = "wasm32"))] // TODO!
 static INTERNAL_EVENT_READER: Mutex<Option<InternalEventReader>> = parking_lot::const_mutex(None);
 
@@ -258,7 +256,18 @@ pub struct EnableMouseCapture;
 
 impl Command for EnableMouseCapture {
     fn write_ansi(&self, f: &mut impl fmt::Write) -> fmt::Result {
-        f.write_str(ansi::ENABLE_MOUSE_MODE_CSI_SEQUENCE)
+        f.write_str(concat!(
+            // Normal tracking: Send mouse X & Y on button press and release
+            csi!("?1000h"),
+            // Button-event tracking: Report button motion events (dragging)
+            csi!("?1002h"),
+            // Any-event tracking: Report all motion events
+            csi!("?1003h"),
+            // RXVT mouse mode: Allows mouse coordinates of >223
+            csi!("?1015h"),
+            // SGR mouse mode: Allows mouse coordinates of >223, preferred over RXVT mode
+            csi!("?1006h"),
+        ))
     }
 
     #[cfg(windows)]
@@ -280,7 +289,14 @@ pub struct DisableMouseCapture;
 
 impl Command for DisableMouseCapture {
     fn write_ansi(&self, f: &mut impl fmt::Write) -> fmt::Result {
-        f.write_str(ansi::DISABLE_MOUSE_MODE_CSI_SEQUENCE)
+        f.write_str(concat!(
+            // The inverse commands of EnableMouseCapture, in reverse order.
+            csi!("?1006l"),
+            csi!("?1015l"),
+            csi!("?1003l"),
+            csi!("?1002l"),
+            csi!("?1000l"),
+        ))
     }
 
     #[cfg(windows)]
@@ -443,11 +459,11 @@ pub enum KeyCode {
     Insert,
     /// F key.
     ///
-    /// `KeyEvent::F(1)` represents F1 key, etc.
+    /// `KeyCode::F(1)` represents F1 key, etc.
     F(u8),
     /// A character.
     ///
-    /// `KeyEvent::Char('c')` represents `c` character, etc.
+    /// `KeyCode::Char('c')` represents `c` character, etc.
     Char(char),
     /// Null.
     Null,

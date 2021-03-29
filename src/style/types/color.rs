@@ -3,6 +3,8 @@ use std::{convert::AsRef, convert::TryFrom, result::Result, str::FromStr};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+use crate::style::parse_next_u8;
+
 /// Represents a color.
 ///
 /// # Platform-specific Notes
@@ -21,8 +23,7 @@ use serde::{Deserialize, Serialize};
 /// | `White` | `DarkWhite` |
 ///
 /// Most UNIX terminals and Windows 10 consoles support additional colors.
-/// See [`Color::Rgb`](enum.Color.html#variant.Rgb) or [`Color::AnsiValue`](enum.Color.html#variant.AnsiValue) for
-/// more info.
+/// See [`Color::Rgb`] or [`Color::AnsiValue`] for more info.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Hash)]
 pub enum Color {
@@ -88,6 +89,78 @@ pub enum Color {
     /// Most UNIX terminals and Windows 10 supported only.
     /// See [Platform-specific notes](enum.Color.html#platform-specific-notes) for more info.
     AnsiValue(u8),
+}
+
+impl Color {
+    /// Parses an ANSI color sequence.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use crossterm::style::Color;
+    ///
+    /// assert_eq!(Color::parse_ansi("5;0"), Some(Color::Black));
+    /// assert_eq!(Color::parse_ansi("5;26"), Some(Color::AnsiValue(26)));
+    /// assert_eq!(Color::parse_ansi("2;50;60;70"), Some(Color::Rgb { r: 50, g: 60, b: 70 }));
+    /// assert_eq!(Color::parse_ansi("invalid color"), None);
+    /// ```
+    ///
+    /// Currently, 3/4 bit color values aren't supported so return `None`.
+    ///
+    /// See also: [`Colored::parse_ansi`](crate::style::Colored::parse_ansi).
+    pub fn parse_ansi(ansi: &str) -> Option<Self> {
+        Self::parse_ansi_iter(&mut ansi.split(';'))
+    }
+
+    /// The logic for parse_ansi, takes an iterator of the sequences terms (the numbers between the
+    /// ';'). It's a separate function so it can be used by both Color::parse_ansi and
+    /// colored::parse_ansi.
+    /// Tested in Colored tests.
+    pub(crate) fn parse_ansi_iter<'a>(values: &mut impl Iterator<Item = &'a str>) -> Option<Self> {
+        let color = match parse_next_u8(values)? {
+            // 8 bit colors: `5;<n>`
+            5 => {
+                let n = parse_next_u8(values)?;
+
+                use Color::*;
+                [
+                    Black,       // 0
+                    DarkRed,     // 1
+                    DarkGreen,   // 2
+                    DarkYellow,  // 3
+                    DarkBlue,    // 4
+                    DarkMagenta, // 5
+                    DarkCyan,    // 6
+                    Grey,        // 7
+                    DarkGrey,    // 8
+                    Red,         // 9
+                    Green,       // 10
+                    Yellow,      // 11
+                    Blue,        // 12
+                    Magenta,     // 13
+                    Cyan,        // 14
+                    White,       // 15
+                ]
+                .get(n as usize)
+                .copied()
+                .unwrap_or(Color::AnsiValue(n))
+            }
+
+            // 24 bit colors: `2;<r>;<g>;<b>`
+            2 => Color::Rgb {
+                r: parse_next_u8(values)?,
+                g: parse_next_u8(values)?,
+                b: parse_next_u8(values)?,
+            },
+
+            _ => return None,
+        };
+        // If there's another value, it's unexpected so return None.
+        if values.next().is_some() {
+            return None;
+        }
+        Some(color)
+    }
 }
 
 impl TryFrom<&str> for Color {
