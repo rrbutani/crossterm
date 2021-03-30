@@ -91,8 +91,12 @@ use crate::Result;
 use filter::{EventFilter, Filter};
 #[cfg(not(target_arch = "wasm32"))]
 use read::InternalEventReader;
-#[cfg(all(feature = "event-stream", not(target_arch = "wasm32")))]
+
+#[cfg(feature = "event-stream")]
+mod stream;
+#[cfg(all(feature = "event-stream"))]
 pub use stream::EventStream;
+
 #[cfg(not(target_arch = "wasm32"))]
 use timeout::PollTimeout;
 
@@ -103,6 +107,7 @@ mod read;
 mod source;
 #[cfg(not(target_arch = "wasm32"))]
 mod timeout;
+mod sys;
 
 /// Static instance of `InternalEventReader`.
 /// This needs to be static because there can be one event reader.

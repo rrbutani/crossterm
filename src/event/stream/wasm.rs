@@ -16,7 +16,7 @@ use crate::Result;
 
 use super::super::{
     Event, InternalEvent,
-    sys::unix::parse::parse_event, // TODO: spin out parse instead...
+    sys::unix::parse::parse_event // TODO: spin out parse instead...
 };
 
 type RwLock<T> = StdRwLock<T>;
