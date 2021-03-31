@@ -107,7 +107,7 @@ mod read;
 mod source;
 #[cfg(not(target_arch = "wasm32"))]
 mod timeout;
-mod sys;
+pub(crate) mod sys;
 
 /// Static instance of `InternalEventReader`.
 /// This needs to be static because there can be one event reader.
