@@ -126,7 +126,7 @@ impl<'t> EventStream<'t> {
 impl<'t> Stream for EventStream<'t> {
     type Item = Result<Event>;
 
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         if self.waker.read().unwrap().is_none() {
             *self.waker.write().unwrap() = Some(cx.waker().clone())
         }
