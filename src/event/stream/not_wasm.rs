@@ -10,10 +10,7 @@ use std::{
     time::Duration,
 };
 
-use futures_core::{
-    task::{Context, Poll},
-    Stream,
-};
+use futures_core::Stream;
 
 use crate::Result;
 
