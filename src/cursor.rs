@@ -10,7 +10,7 @@
 //! ## Examples
 //!
 //! Cursor actions can be performed with commands.
-//! Please have a look at [command documention](../index.html#command-api) for a more detailed documentation.
+//! Please have a look at [command documentation](../index.html#command-api) for a more detailed documentation.
 //!
 //! ```no_run
 //! use std::io::{stdout, Write};
@@ -42,18 +42,18 @@
 //!
 //! For manual execution control check out [crossterm::queue](../macro.queue.html).
 
-#[cfg(not(target_arch = "wasm32"))]
-pub use sys::position;
-#[cfg(target_arch = "wasm32")]
-// pub use sys::position as xtermjs_position; // the wasm `position` function takes a `Terminal` arg // TODO: is this better?
-pub use sys::position as position; // the wasm `position` function takes a `Terminal` arg
+use std::fmt;
 
 #[cfg(windows)]
 use crate::Result;
-use crate::{impl_display, Ansi, Command};
-use std::fmt;
+use crate::{csi, impl_display, Command};
 
-mod ansi;
+#[cfg(not(target_arch = "wasm32"))]
+pub use sys::position;
+// the wasm `position` function takes a `Terminal` arg
+#[cfg(target_arch = "wasm32")]
+pub use sys::position as position;
+
 pub(crate) mod sys;
 
 /// A command that moves the terminal cursor to the given position (column, row).
@@ -65,52 +65,14 @@ pub(crate) mod sys;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MoveTo(pub u16, pub u16);
 
-impl fmt::Display for Ansi<MoveTo> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        ansi::move_to_csi_sequence(f, (self.0).0, (self.0).1)
-    }
-}
-
 impl Command for MoveTo {
-    type AnsiType = Ansi<Self>;
-
-    #[inline]
-    fn ansi_code(&self) -> Self::AnsiType {
-        Ansi(*self)
+    fn write_ansi(&self, f: &mut impl fmt::Write) -> fmt::Result {
+        write!(f, csi!("{};{}H"), self.1 + 1, self.0 + 1)
     }
 
     #[cfg(windows)]
-    fn execute_winapi(&self) -> Result<()> {
+    fn execute_winapi(&self, _writer: impl FnMut() -> Result<()>) -> Result<()> {
         sys::move_to(self.0, self.1)
-    }
-}
-
-/// A command that moves the terminal cursor up the given number of lines,
-/// and moves it to the first column.
-///
-/// # Notes
-///
-/// Commands must be executed/queued for execution otherwise they do nothing.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct MoveToNextLine(pub u16);
-
-impl fmt::Display for Ansi<MoveToNextLine> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        ansi::move_to_next_line_csi_sequence(f, (self.0).0)
-    }
-}
-
-impl Command for MoveToNextLine {
-    type AnsiType = Ansi<Self>;
-
-    #[inline]
-    fn ansi_code(&self) -> Self::AnsiType {
-        Ansi(*self)
-    }
-
-    #[cfg(windows)]
-    fn execute_winapi(&self) -> Result<()> {
-        sys::move_to_next_line(self.0)
     }
 }
 
@@ -121,24 +83,35 @@ impl Command for MoveToNextLine {
 ///
 /// Commands must be executed/queued for execution otherwise they do nothing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct MoveToPreviousLine(pub u16);
+pub struct MoveToNextLine(pub u16);
 
-impl fmt::Display for Ansi<MoveToPreviousLine> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        ansi::move_to_previous_line_csi_sequence(f, (self.0).0)
-    }
-}
-
-impl Command for MoveToPreviousLine {
-    type AnsiType = Ansi<Self>;
-
-    #[inline]
-    fn ansi_code(&self) -> Self::AnsiType {
-        Ansi(*self)
+impl Command for MoveToNextLine {
+    fn write_ansi(&self, f: &mut impl fmt::Write) -> fmt::Result {
+        write!(f, csi!("{}E"), self.0)
     }
 
     #[cfg(windows)]
-    fn execute_winapi(&self) -> Result<()> {
+    fn execute_winapi(&self, _writer: impl FnMut() -> Result<()>) -> Result<()> {
+        sys::move_to_next_line(self.0)
+    }
+}
+
+/// A command that moves the terminal cursor up the given number of lines,
+/// and moves it to the first column.
+///
+/// # Notes
+///
+/// Commands must be executed/queued for execution otherwise they do nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MoveToPreviousLine(pub u16);
+
+impl Command for MoveToPreviousLine {
+    fn write_ansi(&self, f: &mut impl fmt::Write) -> fmt::Result {
+        write!(f, csi!("{}F"), self.0)
+    }
+
+    #[cfg(windows)]
+    fn execute_winapi(&self, _writer: impl FnMut() -> Result<()>) -> Result<()> {
         sys::move_to_previous_line(self.0)
     }
 }
@@ -151,23 +124,33 @@ impl Command for MoveToPreviousLine {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MoveToColumn(pub u16);
 
-impl fmt::Display for Ansi<MoveToColumn> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        ansi::move_to_column_csi_sequence(f, (self.0).0)
-    }
-}
-
 impl Command for MoveToColumn {
-    type AnsiType = Ansi<Self>;
-
-    #[inline]
-    fn ansi_code(&self) -> Self::AnsiType {
-        Ansi(*self)
+    fn write_ansi(&self, f: &mut impl fmt::Write) -> fmt::Result {
+        write!(f, csi!("{}G"), self.0)
     }
 
     #[cfg(windows)]
-    fn execute_winapi(&self) -> Result<()> {
+    fn execute_winapi(&self, _writer: impl FnMut() -> Result<()>) -> Result<()> {
         sys::move_to_column(self.0)
+    }
+}
+
+/// A command that moves the terminal cursor to the given row on the current column.
+///
+/// # Notes
+///
+/// Commands must be executed/queued for execution otherwise they do nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MoveToRow(pub u16);
+
+impl Command for MoveToRow {
+    fn write_ansi(&self, f: &mut impl fmt::Write) -> fmt::Result {
+        write!(f, csi!("{}d"), self.0)
+    }
+
+    #[cfg(windows)]
+    fn execute_winapi(&self, _writer: impl FnMut() -> Result<()>) -> Result<()> {
+        sys::move_to_row(self.0)
     }
 }
 
@@ -179,22 +162,16 @@ impl Command for MoveToColumn {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MoveUp(pub u16);
 
-impl fmt::Display for Ansi<MoveUp> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        ansi::move_up_csi_sequence(f, (self.0).0)
-    }
-}
-
 impl Command for MoveUp {
-    type AnsiType = Ansi<Self>;
-
-    #[inline]
-    fn ansi_code(&self) -> Self::AnsiType {
-        Ansi(*self)
+    fn write_ansi(&self, f: &mut impl fmt::Write) -> fmt::Result {
+        if self.0 != 0 {
+            write!(f, csi!("{}A"), self.0)?;
+        }
+        Ok(())
     }
 
     #[cfg(windows)]
-    fn execute_winapi(&self) -> Result<()> {
+    fn execute_winapi(&self, _writer: impl FnMut() -> Result<()>) -> Result<()> {
         sys::move_up(self.0)
     }
 }
@@ -207,22 +184,16 @@ impl Command for MoveUp {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MoveRight(pub u16);
 
-impl fmt::Display for Ansi<MoveRight> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        ansi::move_right_csi_sequence(f, (self.0).0)
-    }
-}
-
 impl Command for MoveRight {
-    type AnsiType = Ansi<Self>;
-
-    #[inline]
-    fn ansi_code(&self) -> Self::AnsiType {
-        Ansi(*self)
+    fn write_ansi(&self, f: &mut impl fmt::Write) -> fmt::Result {
+        if self.0 != 0 {
+            write!(f, csi!("{}C"), self.0)?;
+        }
+        Ok(())
     }
 
     #[cfg(windows)]
-    fn execute_winapi(&self) -> Result<()> {
+    fn execute_winapi(&self, _writer: impl FnMut() -> Result<()>) -> Result<()> {
         sys::move_right(self.0)
     }
 }
@@ -235,22 +206,16 @@ impl Command for MoveRight {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MoveDown(pub u16);
 
-impl fmt::Display for Ansi<MoveDown> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        ansi::move_down_csi_sequence(f, (self.0).0)
-    }
-}
-
 impl Command for MoveDown {
-    type AnsiType = Ansi<Self>;
-
-    #[inline]
-    fn ansi_code(&self) -> Self::AnsiType {
-        Ansi(*self)
+    fn write_ansi(&self, f: &mut impl fmt::Write) -> fmt::Result {
+        if self.0 != 0 {
+            write!(f, csi!("{}B"), self.0)?;
+        }
+        Ok(())
     }
 
     #[cfg(windows)]
-    fn execute_winapi(&self) -> Result<()> {
+    fn execute_winapi(&self, _writer: impl FnMut() -> Result<()>) -> Result<()> {
         sys::move_down(self.0)
     }
 }
@@ -263,22 +228,16 @@ impl Command for MoveDown {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MoveLeft(pub u16);
 
-impl fmt::Display for Ansi<MoveLeft> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        ansi::move_left_csi_sequence(f, (self.0).0)
-    }
-}
-
 impl Command for MoveLeft {
-    type AnsiType = Ansi<Self>;
-
-    #[inline]
-    fn ansi_code(&self) -> Self::AnsiType {
-        Ansi(*self)
+    fn write_ansi(&self, f: &mut impl fmt::Write) -> fmt::Result {
+        if self.0 != 0 {
+            write!(f, csi!("{}D"), self.0)?;
+        }
+        Ok(())
     }
 
     #[cfg(windows)]
-    fn execute_winapi(&self) -> Result<()> {
+    fn execute_winapi(&self, _writer: impl FnMut() -> Result<()>) -> Result<()> {
         sys::move_left(self.0)
     }
 }
@@ -295,15 +254,12 @@ impl Command for MoveLeft {
 pub struct SavePosition;
 
 impl Command for SavePosition {
-    type AnsiType = &'static str;
-
-    #[inline]
-    fn ansi_code(&self) -> Self::AnsiType {
-        ansi::SAVE_POSITION_CSI_SEQUENCE
+    fn write_ansi(&self, f: &mut impl fmt::Write) -> fmt::Result {
+        f.write_str("\x1B7")
     }
 
     #[cfg(windows)]
-    fn execute_winapi(&self) -> Result<()> {
+    fn execute_winapi(&self, _writer: impl FnMut() -> Result<()>) -> Result<()> {
         sys::save_position()
     }
 }
@@ -320,15 +276,12 @@ impl Command for SavePosition {
 pub struct RestorePosition;
 
 impl Command for RestorePosition {
-    type AnsiType = &'static str;
-
-    #[inline]
-    fn ansi_code(&self) -> Self::AnsiType {
-        ansi::RESTORE_POSITION_CSI_SEQUENCE
+    fn write_ansi(&self, f: &mut impl fmt::Write) -> fmt::Result {
+        f.write_str("\x1B8")
     }
 
     #[cfg(windows)]
-    fn execute_winapi(&self) -> Result<()> {
+    fn execute_winapi(&self, _writer: impl FnMut() -> Result<()>) -> Result<()> {
         sys::restore_position()
     }
 }
@@ -342,15 +295,12 @@ impl Command for RestorePosition {
 pub struct Hide;
 
 impl Command for Hide {
-    type AnsiType = &'static str;
-
-    #[inline]
-    fn ansi_code(&self) -> Self::AnsiType {
-        ansi::HIDE_CSI_SEQUENCE
+    fn write_ansi(&self, f: &mut impl fmt::Write) -> fmt::Result {
+        f.write_str(csi!("?25l"))
     }
 
     #[cfg(windows)]
-    fn execute_winapi(&self) -> Result<()> {
+    fn execute_winapi(&self, _writer: impl FnMut() -> Result<()>) -> Result<()> {
         sys::show_cursor(false)
     }
 }
@@ -364,15 +314,12 @@ impl Command for Hide {
 pub struct Show;
 
 impl Command for Show {
-    type AnsiType = &'static str;
-
-    #[inline]
-    fn ansi_code(&self) -> Self::AnsiType {
-        ansi::SHOW_CSI_SEQUENCE
+    fn write_ansi(&self, f: &mut impl fmt::Write) -> fmt::Result {
+        f.write_str(csi!("?25h"))
     }
 
     #[cfg(windows)]
-    fn execute_winapi(&self) -> Result<()> {
+    fn execute_winapi(&self, _writer: impl FnMut() -> Result<()>) -> Result<()> {
         sys::show_cursor(true)
     }
 }
@@ -387,15 +334,12 @@ impl Command for Show {
 pub struct EnableBlinking;
 
 impl Command for EnableBlinking {
-    type AnsiType = &'static str;
-
-    #[inline]
-    fn ansi_code(&self) -> Self::AnsiType {
-        ansi::ENABLE_BLINKING_CSI_SEQUENCE
+    fn write_ansi(&self, f: &mut impl fmt::Write) -> fmt::Result {
+        f.write_str(csi!("?12h"))
     }
 
     #[cfg(windows)]
-    fn execute_winapi(&self) -> Result<()> {
+    fn execute_winapi(&self, _writer: impl FnMut() -> Result<()>) -> Result<()> {
         Ok(())
     }
 }
@@ -410,21 +354,55 @@ impl Command for EnableBlinking {
 pub struct DisableBlinking;
 
 impl Command for DisableBlinking {
-    type AnsiType = &'static str;
-
-    #[inline]
-    fn ansi_code(&self) -> Self::AnsiType {
-        ansi::DISABLE_BLINKING_CSI_SEQUENCE
+    fn write_ansi(&self, f: &mut impl fmt::Write) -> fmt::Result {
+        f.write_str(csi!("?12l"))
     }
 
     #[cfg(windows)]
-    fn execute_winapi(&self) -> Result<()> {
+    fn execute_winapi(&self, _writer: impl FnMut() -> Result<()>) -> Result<()> {
+        Ok(())
+    }
+}
+
+/// All supported cursor shapes
+///
+/// # Note
+///
+/// - Used with SetCursorShape
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CursorShape {
+    UnderScore,
+    Line,
+    Block,
+}
+
+/// A command that sets the shape of the cursor
+///
+/// # Note
+///
+/// - Commands must be executed/queued for execution otherwise they do nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SetCursorShape(pub CursorShape);
+
+impl Command for SetCursorShape {
+    fn write_ansi(&self, f: &mut impl fmt::Write) -> fmt::Result {
+        use CursorShape::*;
+        match self.0 {
+            UnderScore => f.write_str("\x1b[3 q"),
+            Line => f.write_str("\x1b[5 q"),
+            Block => f.write_str("\x1b[2 q"),
+        }
+    }
+
+    #[cfg(windows)]
+    fn execute_winapi(&self, _writer: impl FnMut() -> Result<()>) -> Result<()> {
         Ok(())
     }
 }
 
 impl_display!(for MoveTo);
 impl_display!(for MoveToColumn);
+impl_display!(for MoveToRow);
 impl_display!(for MoveToNextLine);
 impl_display!(for MoveToPreviousLine);
 impl_display!(for MoveUp);
@@ -437,10 +415,11 @@ impl_display!(for Hide);
 impl_display!(for Show);
 impl_display!(for EnableBlinking);
 impl_display!(for DisableBlinking);
+impl_display!(for SetCursorShape);
 
 #[cfg(test)]
 mod tests {
-    use std::io::{self, stdout, Write};
+    use std::io::{self, stdout};
 
     use crate::execute;
 

@@ -47,6 +47,7 @@ see [Tested Terminals](#tested-terminals) for more info).
     - Alternate screen
     - Raw screen   
     - Set terminal title
+    - Enable/disable line wrapping
 - Event 
     - Input Events 
     - Mouse Events (press, release, position, button, drag)
@@ -66,9 +67,11 @@ WARNING: Do not change following heading title as it's used in the URL by other 
     - Windows 8.1 (N)
 - Ubuntu Desktop Terminal
     - Ubuntu 17.10
+    - Pop!_OS ( Ubuntu ) 20.04
 - (Arch, Manjaro) KDE Konsole
 - (Arch) Kitty
 - Linux Mint
+- OpenSuse/Linux Alacritty
 
 This crate supports all UNIX terminals and Windows terminals down to Windows 7; however, not all of the
 terminals have been tested. If you have used this library for a terminal other than the above list without
@@ -84,7 +87,7 @@ Click to show Cargo.toml.
 
 ```toml
 [dependencies]
-crossterm = "0.17"
+crossterm = "0.18"
 ```
 
 </details>
@@ -142,8 +145,7 @@ features = ["event-stream"]
 | Dependency | Used for | Included |
 | :----- | :----- | :-----
 | `bitflags` | `KeyModifiers`, those are differ based on input.| always
-| `lazy_static` | original console color, original terminal mode, saved cursor position, supports ANSI on windows, single event reader per application.| always
-| `parking_lot` | used for an RW LOCK. | always 
+| `parking_lot` | locking `RwLock`s with a timeout, const mutexes. | always
 | `libc` | UNIX terminal_size/raw modes/set_title and several other lowlevel functionality. | UNIX only
 | `Mio` | event readiness polling, waking up poller | UNIX only
 | `signal-hook`| signalhook is used to handle terminal resize SIGNAL with Mio. | UNIX only

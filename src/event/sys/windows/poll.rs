@@ -23,8 +23,8 @@ pub(crate) struct WinApiPoll {
 
 impl WinApiPoll {
     #[cfg(not(feature = "event-stream"))]
-    pub(crate) fn new() -> Result<WinApiPoll> {
-        Ok(WinApiPoll {})
+    pub(crate) fn new() -> WinApiPoll {
+        WinApiPoll {}
     }
 
     #[cfg(feature = "event-stream")]

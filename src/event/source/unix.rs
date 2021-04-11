@@ -1,6 +1,7 @@
+use std::{collections::VecDeque, io, time::Duration};
+
 use mio::{unix::SourceFd, Events, Interest, Poll, Token};
 use signal_hook::iterator::Signals;
-use std::{collections::VecDeque, io, time::Duration};
 
 use crate::{ErrorKind, Result};
 
@@ -40,7 +41,7 @@ pub(crate) struct UnixInternalEventSource {
 
 impl UnixInternalEventSource {
     pub fn new() -> Result<Self> {
-        Ok(UnixInternalEventSource::from_file_descriptor(tty_fd()?)?)
+        UnixInternalEventSource::from_file_descriptor(tty_fd()?)
     }
 
     pub(crate) fn from_file_descriptor(input_fd: FileDesc) -> Result<Self> {

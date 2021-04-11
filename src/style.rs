@@ -110,12 +110,13 @@
 //! );
 //! ```
 
-use std::fmt::Display;
+use std::{
+    fmt::{self, Display},
+};
 
 #[cfg(windows)]
 use crate::Result;
-use crate::{impl_display, Ansi, Command};
-use std::fmt;
+use crate::{csi, impl_display, Command};
 
 pub use self::{
     attributes::Attributes,
@@ -127,7 +128,6 @@ pub use self::{
 
 #[macro_use]
 mod macros;
-mod ansi;
 mod attributes;
 mod content_style;
 mod styled_content;
@@ -152,10 +152,7 @@ mod types;
 ///
 /// println!("{}", styled_content);
 /// ```
-pub fn style<'a, D: 'a>(val: D) -> StyledContent<D>
-where
-    D: Display + Clone,
-{
+pub fn style<D: Display>(val: D) -> StyledContent<D> {
     ContentStyle::new().apply(val)
 }
 
@@ -207,22 +204,13 @@ pub fn available_color_count() -> u16 {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SetForegroundColor(pub Color);
 
-impl fmt::Display for Ansi<SetForegroundColor> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        ansi::set_fg_csi_sequence(f, (self.0).0)
-    }
-}
-
 impl Command for SetForegroundColor {
-    type AnsiType = Ansi<Self>;
-
-    #[inline]
-    fn ansi_code(&self) -> Self::AnsiType {
-        Ansi(*self)
+    fn write_ansi(&self, f: &mut impl fmt::Write) -> fmt::Result {
+        write!(f, csi!("{}m"), Colored::ForegroundColor(self.0))
     }
 
     #[cfg(windows)]
-    fn execute_winapi(&self) -> Result<()> {
+    fn execute_winapi(&self, _writer: impl FnMut() -> Result<()>) -> Result<()> {
         sys::windows::set_foreground_color(self.0)
     }
 }
@@ -240,22 +228,13 @@ impl Command for SetForegroundColor {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SetBackgroundColor(pub Color);
 
-impl fmt::Display for Ansi<SetBackgroundColor> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        ansi::set_bg_csi_sequence(f, (self.0).0)
-    }
-}
-
 impl Command for SetBackgroundColor {
-    type AnsiType = Ansi<Self>;
-
-    #[inline]
-    fn ansi_code(&self) -> Self::AnsiType {
-        Ansi(*self)
+    fn write_ansi(&self, f: &mut impl fmt::Write) -> fmt::Result {
+        write!(f, csi!("{}m"), Colored::BackgroundColor(self.0))
     }
 
     #[cfg(windows)]
-    fn execute_winapi(&self) -> Result<()> {
+    fn execute_winapi(&self, _writer: impl FnMut() -> Result<()>) -> Result<()> {
         sys::windows::set_background_color(self.0)
     }
 }
@@ -265,6 +244,7 @@ impl Command for SetBackgroundColor {
 /// For example:
 /// ```no_run
 /// use std::io::{stdout, Write};
+///
 /// use crossterm::execute;
 /// use crossterm::style::{Color::{Green, Black}, Colors, Print, SetColors};
 ///
@@ -283,28 +263,19 @@ impl Command for SetBackgroundColor {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SetColors(pub Colors);
 
-impl fmt::Display for Ansi<SetColors> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if let Some(color) = (self.0).0.foreground {
-            ansi::set_fg_csi_sequence(f, color)?;
+impl Command for SetColors {
+    fn write_ansi(&self, f: &mut impl fmt::Write) -> fmt::Result {
+        if let Some(color) = self.0.foreground {
+            SetForegroundColor(color).write_ansi(f)?;
         }
-        if let Some(color) = (self.0).0.background {
-            ansi::set_bg_csi_sequence(f, color)?;
+        if let Some(color) = self.0.background {
+            SetBackgroundColor(color).write_ansi(f)?;
         }
         Ok(())
     }
-}
-
-impl Command for SetColors {
-    type AnsiType = Ansi<Self>;
-
-    #[inline]
-    fn ansi_code(&self) -> Self::AnsiType {
-        Ansi(*self)
-    }
 
     #[cfg(windows)]
-    fn execute_winapi(&self) -> Result<()> {
+    fn execute_winapi(&self, _writer: impl FnMut() -> Result<()>) -> Result<()> {
         if let Some(color) = self.0.foreground {
             sys::windows::set_foreground_color(color)?;
         }
@@ -325,22 +296,13 @@ impl Command for SetColors {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SetAttribute(pub Attribute);
 
-impl fmt::Display for Ansi<SetAttribute> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        ansi::set_attr_csi_sequence(f, (self.0).0)
-    }
-}
-
 impl Command for SetAttribute {
-    type AnsiType = Ansi<Self>;
-
-    #[inline]
-    fn ansi_code(&self) -> Self::AnsiType {
-        Ansi(*self)
+    fn write_ansi(&self, f: &mut impl fmt::Write) -> fmt::Result {
+        write!(f, csi!("{}m"), self.0.sgr())
     }
 
     #[cfg(windows)]
-    fn execute_winapi(&self) -> Result<()> {
+    fn execute_winapi(&self, _writer: impl FnMut() -> Result<()>) -> Result<()> {
         // attributes are not supported by WinAPI.
         Ok(())
     }
@@ -356,21 +318,18 @@ impl Command for SetAttribute {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SetAttributes(pub Attributes);
 
-impl fmt::Display for Ansi<SetAttributes> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        ansi::set_attrs_csi_sequence(f, (self.0).0)
-    }
-}
-
 impl Command for SetAttributes {
-    type AnsiType = Ansi<Self>;
-
-    fn ansi_code(&self) -> Self::AnsiType {
-        Ansi(*self)
+    fn write_ansi(&self, f: &mut impl fmt::Write) -> fmt::Result {
+        for attr in Attribute::iterator() {
+            if self.0.has(attr) {
+                SetAttribute(attr).write_ansi(f)?;
+            }
+        }
+        Ok(())
     }
 
     #[cfg(windows)]
-    fn execute_winapi(&self) -> Result<()> {
+    fn execute_winapi(&self, _writer: impl FnMut() -> Result<()>) -> Result<()> {
         // attributes are not supported by WinAPI.
         Ok(())
     }
@@ -383,21 +342,16 @@ impl Command for SetAttributes {
 /// # Notes
 ///
 /// Commands must be executed/queued for execution otherwise they do nothing.
-#[derive(Debug, Clone)]
-pub struct PrintStyledContent<D: Display + Clone>(pub StyledContent<D>);
+#[derive(Debug, Copy, Clone)]
+pub struct PrintStyledContent<D: Display>(pub StyledContent<D>);
 
-impl<D> Command for PrintStyledContent<D>
-where
-    D: Display + Clone,
-{
-    type AnsiType = StyledContent<D>;
-
-    fn ansi_code(&self) -> Self::AnsiType {
-        self.0.clone()
+impl<D: Display> Command for PrintStyledContent<D> {
+    fn write_ansi(&self, f: &mut impl fmt::Write) -> fmt::Result {
+        write!(f, "{}", self.0)
     }
 
     #[cfg(windows)]
-    fn execute_winapi(&self) -> Result<()> {
+    fn execute_winapi(&self, _writer: impl FnMut() -> Result<()>) -> Result<()> {
         Ok(())
     }
 }
@@ -411,14 +365,12 @@ where
 pub struct ResetColor;
 
 impl Command for ResetColor {
-    type AnsiType = &'static str;
-
-    fn ansi_code(&self) -> Self::AnsiType {
-        ansi::RESET_CSI_SEQUENCE
+    fn write_ansi(&self, f: &mut impl fmt::Write) -> fmt::Result {
+        f.write_str(csi!("0m"))
     }
 
     #[cfg(windows)]
-    fn execute_winapi(&self) -> Result<()> {
+    fn execute_winapi(&self, _writer: impl FnMut() -> Result<()>) -> Result<()> {
         sys::windows::reset()
     }
 }
@@ -427,28 +379,22 @@ impl Command for ResetColor {
 ///
 /// Commands must be executed/queued for execution otherwise they do nothing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Print<T: Display + Clone>(pub T);
+pub struct Print<T: Display>(pub T);
 
-impl<T: Display + Clone> Command for Print<T> {
-    type AnsiType = T;
-
-    fn ansi_code(&self) -> Self::AnsiType {
-        self.0.clone()
+impl<T: Display> Command for Print<T> {
+    fn write_ansi(&self, f: &mut impl fmt::Write) -> fmt::Result {
+        write!(f, "{}", self.0)
     }
 
     #[cfg(windows)]
-    fn execute_winapi(&self) -> Result<()> {
-        print!("{}", self.0);
-        Ok(())
+    fn execute_winapi(&self, mut writer: impl FnMut() -> Result<()>) -> Result<()> {
+        writer()
     }
 }
 
-impl<T: Display + Clone> Display for Print<T> {
-    fn fmt(
-        &self,
-        f: &mut ::std::fmt::Formatter<'_>,
-    ) -> ::std::result::Result<(), ::std::fmt::Error> {
-        write!(f, "{}", self.ansi_code())
+impl<T: Display> Display for Print<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
     }
 }
 
@@ -459,3 +405,9 @@ impl_display!(for SetAttribute);
 impl_display!(for PrintStyledContent<String>);
 impl_display!(for PrintStyledContent<&'static str>);
 impl_display!(for ResetColor);
+
+/// Utility function for ANSI parsing in Color and Colored.
+/// Gets the next element of `iter` and tries to parse it as a u8.
+fn parse_next_u8<'a>(iter: &mut impl Iterator<Item = &'a str>) -> Option<u8> {
+    iter.next().and_then(|s| u8::from_str_radix(s, 10).ok())
+}

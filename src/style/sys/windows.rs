@@ -1,9 +1,8 @@
-use std::sync::Mutex;
+use std::convert::TryFrom;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use crossterm_winapi::{Console, Handle, HandleType, ScreenBuffer};
 use winapi::um::wincon;
-
-use lazy_static::lazy_static;
 
 use crate::Result;
 
@@ -70,22 +69,20 @@ pub(crate) fn set_background_color(bg_color: Color) -> Result<()> {
 }
 
 pub(crate) fn reset() -> Result<()> {
-    let original_color = original_console_color();
-
-    Console::from(Handle::new(HandleType::CurrentOutputHandle)?)
-        .set_text_attribute(original_color)?;
+    if let Ok(original_color) = u16::try_from(ORIGINAL_CONSOLE_COLOR.load(Ordering::Relaxed)) {
+        Console::from(Handle::new(HandleType::CurrentOutputHandle)?)
+            .set_text_attribute(original_color)?;
+    }
 
     Ok(())
 }
 
 /// Initializes the default console color. It will will be skipped if it has already been initialized.
 pub(crate) fn init_console_color() -> Result<()> {
-    let mut locked_pos = ORIGINAL_CONSOLE_COLOR.lock().unwrap();
-
-    if locked_pos.is_none() {
+    if ORIGINAL_CONSOLE_COLOR.load(Ordering::Relaxed) == u32::MAX {
         let screen_buffer = ScreenBuffer::current()?;
         let attr = screen_buffer.info()?.attributes();
-        *locked_pos = Some(attr);
+        ORIGINAL_CONSOLE_COLOR.store(u32::from(attr), Ordering::Relaxed);
     }
 
     Ok(())
@@ -93,19 +90,17 @@ pub(crate) fn init_console_color() -> Result<()> {
 
 /// Returns the original console color, make sure to call `init_console_color` before calling this function. Otherwise this function will panic.
 pub(crate) fn original_console_color() -> u16 {
-    // safe unwrap, initial console color was set with `init_console_color` in `WinApiColor::new()`
-    ORIGINAL_CONSOLE_COLOR
-        .lock()
-        .unwrap()
+    u16::try_from(ORIGINAL_CONSOLE_COLOR.load(Ordering::Relaxed))
+        // safe unwrap, initial console color was set with `init_console_color` in `WinApiColor::new()`
         .expect("Initial console color not set")
 }
 
-lazy_static! {
-    static ref ORIGINAL_CONSOLE_COLOR: Mutex<Option<u16>> = Mutex::new(None);
-}
+// This is either a valid u16 in which case it stores the original console color or it is u32::MAX
+// in which case it is uninitialized.
+static ORIGINAL_CONSOLE_COLOR: AtomicU32 = AtomicU32::new(u32::MAX);
 
 impl From<Colored> for u16 {
-    /// Returns the WinApi color value (u16) from the `Colored` struct.
+    /// Returns the WinAPI color value (u16) from the `Colored` struct.
     fn from(colored: Colored) -> Self {
         match colored {
             Colored::ForegroundColor(color) => {
@@ -137,7 +132,7 @@ impl From<Colored> for u16 {
                         original_color & !REMOVE_BG_MASK
                     }
 
-                    /* WinApi will be used for systems that do not support ANSI, those are windows version less then 10. RGB and 255 (AnsiBValue) colors are not supported in that case.*/
+                    /* WinAPI will be used for systems that do not support ANSI, those are windows version less then 10. RGB and 255 (AnsiBValue) colors are not supported in that case.*/
                     Color::Rgb { .. } => 0,
                     Color::AnsiValue(_val) => 0,
                 }
@@ -169,7 +164,7 @@ impl From<Colored> for u16 {
 
                         original_color & !REMOVE_FG_MASK
                     }
-                    /* WinApi will be used for systems that do not support ANSI, those are windows version less then 10. RGB and 255 (AnsiBValue) colors are not supported in that case.*/
+                    /* WinAPI will be used for systems that do not support ANSI, those are windows version less then 10. RGB and 255 (AnsiBValue) colors are not supported in that case.*/
                     Color::Rgb { .. } => 0,
                     Color::AnsiValue(_val) => 0,
                 }
@@ -180,6 +175,8 @@ impl From<Colored> for u16 {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::Ordering;
+
     use crate::style::sys::windows::set_foreground_color;
 
     use super::{
@@ -200,11 +197,11 @@ mod tests {
 
     #[test]
     fn test_original_console_color_is_set() {
-        assert!(ORIGINAL_CONSOLE_COLOR.lock().unwrap().is_none());
+        assert_eq!(ORIGINAL_CONSOLE_COLOR.load(Ordering::Relaxed), u32::MAX);
 
         // will call `init_console_color`
         set_foreground_color(Color::Blue).unwrap();
 
-        assert!(ORIGINAL_CONSOLE_COLOR.lock().unwrap().is_some());
+        assert_ne!(ORIGINAL_CONSOLE_COLOR.load(Ordering::Relaxed), u32::MAX);
     }
 }
